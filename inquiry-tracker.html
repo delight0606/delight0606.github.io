@@ -1,0 +1,1315 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>탐구 일지</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+KR:wght@500;700;900&family=Noto+Sans+KR:wght@400;500;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#F2F4F7;
+    --surface:#FFFFFF;
+    --surface-alt:#E7EAF0;
+    --border:#D6DBE3;
+    --ink:#1B2333;
+    --ink-soft:#565F72;
+    --ink-faint:#8890A0;
+    --accent:#1E4D3D;
+    --accent-strong:#153A2E;
+    --accent-soft:#DCEAE3;
+    --accent-soft-border:#B9D6C8;
+    --amber:#8A5A0C;
+    --amber-soft:#F6E8CF;
+    --amber-soft-border:#E4C98C;
+    --danger:#A23B3B;
+    --danger-soft:#F7DEDE;
+    --danger-soft-border:#E9BBBB;
+    --locked:#8890A0;
+    --locked-soft:#EAEBEF;
+    --locked-soft-border:#D2D5DD;
+    --shadow: 0 1px 2px rgba(27,35,51,0.04), 0 6px 20px rgba(27,35,51,0.06);
+    --radius: 14px;
+    --serif: 'Noto Serif KR', 'Nanum Myeongjo', serif;
+    --sans: 'Noto Sans KR', -apple-system, 'Malgun Gothic', sans-serif;
+    --mono: 'JetBrains Mono', 'Roboto Mono', ui-monospace, monospace;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --bg:#12161C;
+      --surface:#1B222B;
+      --surface-alt:#232B36;
+      --border:#333D4B;
+      --ink:#E7EAF0;
+      --ink-soft:#9AA5B4;
+      --ink-faint:#6E7789;
+      --accent:#5FBF9F;
+      --accent-strong:#7ED4B6;
+      --accent-soft:#1E362F;
+      --accent-soft-border:#2E5245;
+      --amber:#E0A94D;
+      --amber-soft:#3A2E14;
+      --amber-soft-border:#5C481F;
+      --danger:#E58686;
+      --danger-soft:#3A1E1E;
+      --danger-soft-border:#5C2A2A;
+      --locked:#7A8394;
+      --locked-soft:#232833;
+      --locked-soft-border:#333D4B;
+      --shadow: 0 1px 2px rgba(0,0,0,0.2), 0 6px 24px rgba(0,0,0,0.3);
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#12161C;
+    --surface:#1B222B;
+    --surface-alt:#232B36;
+    --border:#333D4B;
+    --ink:#E7EAF0;
+    --ink-soft:#9AA5B4;
+    --ink-faint:#6E7789;
+    --accent:#5FBF9F;
+    --accent-strong:#7ED4B6;
+    --accent-soft:#1E362F;
+    --accent-soft-border:#2E5245;
+    --amber:#E0A94D;
+    --amber-soft:#3A2E14;
+    --amber-soft-border:#5C481F;
+    --danger:#E58686;
+    --danger-soft:#3A1E1E;
+    --danger-soft-border:#5C2A2A;
+    --locked:#7A8394;
+    --locked-soft:#232833;
+    --locked-soft-border:#333D4B;
+    --shadow: 0 1px 2px rgba(0,0,0,0.2), 0 6px 24px rgba(0,0,0,0.3);
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:var(--bg);
+    color:var(--ink);
+    font-family:var(--sans);
+    line-height:1.6;
+    -webkit-font-smoothing:antialiased;
+  }
+  #app{
+    max-width:960px;
+    margin:0 auto;
+    padding:20px 18px 80px;
+    min-height:100vh;
+  }
+  ::selection{background:var(--accent-soft);}
+  a{color:var(--accent);}
+  h1,h2,h3,h4{font-family:var(--serif);font-weight:700;margin:0 0 6px;text-wrap:balance;color:var(--ink);}
+  p{margin:0 0 10px;}
+  .mono{font-family:var(--mono);font-variant-numeric:tabular-nums;}
+  .muted{color:var(--ink-soft);}
+  .faint{color:var(--ink-faint);font-size:13px;}
+  button, .btn{
+    font-family:var(--sans);
+    font-size:14px;
+    font-weight:500;
+    border-radius:10px;
+    border:1px solid var(--border);
+    background:var(--surface);
+    color:var(--ink);
+    padding:10px 16px;
+    cursor:pointer;
+    transition:transform .08s ease, background .15s ease, border-color .15s ease;
+  }
+  button:hover{border-color:var(--accent);}
+  button:active{transform:scale(0.98);}
+  button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible{
+    outline:2px solid var(--accent); outline-offset:2px;
+  }
+  button.primary{background:var(--accent);color:#fff;border-color:var(--accent);}
+  button.primary:hover{background:var(--accent-strong);border-color:var(--accent-strong);}
+  button.ghost{background:transparent;}
+  button.danger{color:var(--danger);border-color:var(--danger-soft-border);}
+  button.danger:hover{border-color:var(--danger);}
+  button.small{padding:6px 11px;font-size:12.5px;border-radius:8px;}
+  button:disabled{opacity:.45;cursor:not-allowed;}
+  input, textarea, select{
+    font-family:var(--sans);
+    font-size:14px;
+    color:var(--ink);
+    background:var(--surface);
+    border:1px solid var(--border);
+    border-radius:9px;
+    padding:9px 11px;
+    width:100%;
+  }
+  textarea{min-height:88px;resize:vertical;line-height:1.55;}
+  label{display:block;font-size:12.5px;font-weight:700;color:var(--ink-soft);letter-spacing:.02em;margin-bottom:5px;}
+  .field{margin-bottom:14px;}
+  .row{display:flex;gap:10px;flex-wrap:wrap;}
+  .row > *{flex:1;min-width:160px;}
+
+  /* header / masthead */
+  .masthead{
+    display:flex;align-items:center;justify-content:space-between;gap:14px;
+    background:var(--accent);color:#fff;border-radius:var(--radius);
+    padding:16px 20px;margin-bottom:18px;box-shadow:var(--shadow);
+  }
+  :root[data-theme="dark"] .masthead, @media (prefers-color-scheme: dark){}
+  .masthead .brand{display:flex;flex-direction:column;gap:2px;}
+  .masthead .brand .subject{font-family:var(--serif);font-weight:900;font-size:19px;letter-spacing:.01em;}
+  .masthead .brand .sub{font-size:12.5px;opacity:.85;}
+  .masthead .who{display:flex;align-items:center;gap:8px;font-size:13px;}
+  .masthead .who .badge2{background:rgba(255,255,255,.16);border-radius:8px;padding:5px 10px;font-weight:600;}
+  .masthead-actions{display:flex;gap:8px;}
+  .masthead-actions button{background:rgba(255,255,255,.12);color:#fff;border-color:rgba(255,255,255,.3);}
+  .masthead-actions button:hover{background:rgba(255,255,255,.22);border-color:#fff;}
+
+  .card{
+    background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);
+    padding:18px 20px;margin-bottom:16px;box-shadow:var(--shadow);
+  }
+  .card.tight{padding:14px 16px;}
+  .stack{display:flex;flex-direction:column;gap:14px;}
+  .hgroup{display:flex;align-items:baseline;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:10px;}
+
+  /* home */
+  .home-hero{text-align:center;padding:34px 10px 8px;}
+  .home-hero .eyebrow{font-family:var(--mono);font-size:12px;letter-spacing:.14em;color:var(--accent);text-transform:uppercase;}
+  .home-hero h1{font-size:30px;margin-top:8px;}
+  .role-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin:22px 0;}
+  @media (max-width:600px){.role-grid{grid-template-columns:1fr;}}
+  .role-card{
+    background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);
+    padding:26px 22px;text-align:left;cursor:pointer;box-shadow:var(--shadow);
+    display:flex;flex-direction:column;gap:8px;transition:border-color .15s ease, transform .1s ease;
+  }
+  .role-card:hover{border-color:var(--accent);transform:translateY(-2px);}
+  .role-card .tag{font-family:var(--mono);font-size:11.5px;letter-spacing:.1em;color:var(--ink-faint);text-transform:uppercase;}
+  .role-card h3{font-size:21px;margin-bottom:2px;}
+  .role-card p{color:var(--ink-soft);font-size:13.5px;margin:0;}
+
+  /* status chip */
+  .chip{
+    display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:700;
+    padding:4px 10px 4px 8px;border-radius:999px;border:1px solid; white-space:nowrap;
+  }
+  .chip .dot{width:7px;height:7px;border-radius:50%;display:inline-block;}
+  .chip.st-locked{background:var(--locked-soft);border-color:var(--locked-soft-border);color:var(--locked);}
+  .chip.st-locked .dot{background:var(--locked);}
+  .chip.st-open{background:var(--surface-alt);border-color:var(--border);color:var(--ink-soft);}
+  .chip.st-open .dot{background:var(--ink-faint);}
+  .chip.st-submitted{background:var(--amber-soft);border-color:var(--amber-soft-border);color:var(--amber);}
+  .chip.st-submitted .dot{background:var(--amber);}
+  .chip.st-approved{background:var(--accent-soft);border-color:var(--accent-soft-border);color:var(--accent);}
+  .chip.st-approved .dot{background:var(--accent);}
+  .chip.st-late{background:var(--danger-soft);border-color:var(--danger-soft-border);color:var(--danger);}
+  .chip.st-late .dot{background:var(--danger);}
+
+  /* stage timeline */
+  .stage-block{border:1px solid var(--border);border-radius:var(--radius);margin-bottom:14px;overflow:hidden;}
+  .stage-head{
+    display:flex;align-items:center;gap:12px;padding:14px 18px;background:var(--surface-alt);
+    flex-wrap:wrap;justify-content:space-between;
+  }
+  .stage-head .left{display:flex;align-items:center;gap:12px;}
+  .stage-num{
+    font-family:var(--serif);font-weight:900;font-size:15px;color:var(--accent);
+    background:var(--accent-soft);border:1px solid var(--accent-soft-border);
+    width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0;
+  }
+  .stage-title{font-family:var(--serif);font-weight:700;font-size:16px;}
+  .stage-deadline{font-size:12.5px;color:var(--ink-soft);font-family:var(--mono);}
+  .stage-body{padding:16px 18px;background:var(--surface);}
+  .stage-body.empty{color:var(--ink-faint);font-size:13.5px;font-style:italic;}
+
+  .entry{border-left:3px solid var(--border);padding:4px 0 4px 14px;margin-bottom:14px;position:relative;}
+  .entry:last-child{margin-bottom:0;}
+  .entry.type-feedback{border-left-color:var(--amber);}
+  .entry.type-submission{border-left-color:var(--accent);}
+  .entry.type-approval{border-left-color:var(--accent);}
+  .entry .entry-meta{display:flex;gap:8px;align-items:center;font-size:12px;color:var(--ink-faint);margin-bottom:4px;flex-wrap:wrap;}
+  .entry .entry-author{font-weight:700;color:var(--ink-soft);}
+  .entry .entry-text{white-space:pre-wrap;font-size:14px;}
+  .item-card{
+    background:var(--surface-alt);border:1px solid var(--border);border-radius:10px;
+    padding:10px 12px;margin-top:8px;
+  }
+  .item-card .item-title{font-weight:700;font-size:13.5px;margin-bottom:3px;}
+  .item-card .item-desc{white-space:pre-wrap;font-size:13.5px;color:var(--ink-soft);}
+  .file-list{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px;}
+  .file-chip{
+    display:flex;align-items:center;gap:6px;background:var(--surface);border:1px solid var(--border);
+    border-radius:8px;padding:5px 9px;font-size:12px;text-decoration:none;color:var(--ink);
+  }
+  .file-chip img{width:20px;height:20px;object-fit:cover;border-radius:4px;}
+  .file-chip .ic{font-size:14px;}
+
+  .form-item{border:1px dashed var(--border);border-radius:10px;padding:12px;margin-bottom:10px;background:var(--surface-alt);}
+  .form-item-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;}
+  .form-item-head .num{font-family:var(--mono);font-size:12px;color:var(--ink-faint);}
+  .draft-file-list{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;}
+  .draft-file-chip{display:flex;align-items:center;gap:5px;background:var(--surface);border:1px solid var(--border);border-radius:7px;padding:4px 7px;font-size:11.5px;}
+  .draft-file-chip button{padding:1px 5px;font-size:11px;border-radius:5px;}
+
+  table{width:100%;border-collapse:collapse;font-size:13.5px;}
+  th,td{text-align:left;padding:9px 10px;border-bottom:1px solid var(--border);}
+  th{font-size:12px;text-transform:uppercase;letter-spacing:.04em;color:var(--ink-faint);font-weight:700;}
+  tr.clickable{cursor:pointer;}
+  tr.clickable:hover td{background:var(--surface-alt);}
+  .table-wrap{overflow-x:auto;}
+
+  .notice{
+    border-radius:10px;padding:12px 14px;font-size:13.5px;margin-bottom:12px;border:1px solid;
+  }
+  .notice.info{background:var(--surface-alt);border-color:var(--border);color:var(--ink-soft);}
+  .notice.warn{background:var(--amber-soft);border-color:var(--amber-soft-border);color:var(--amber);}
+  .notice.danger{background:var(--danger-soft);border-color:var(--danger-soft-border);color:var(--danger);}
+  .notice.ok{background:var(--accent-soft);border-color:var(--accent-soft-border);color:var(--accent);}
+
+  .toast{
+    position:fixed;bottom:20px;left:50%;transform:translateX(-50%);
+    background:var(--ink);color:var(--bg);padding:11px 20px;border-radius:10px;font-size:13.5px;
+    box-shadow:var(--shadow);z-index:999;opacity:0;pointer-events:none;transition:opacity .25s ease, transform .25s ease;
+  }
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(-4px);}
+
+  .link-btn{background:none;border:none;color:var(--accent);text-decoration:underline;padding:0;font-size:13px;cursor:pointer;}
+  .backlink{margin-bottom:14px;}
+  .helpbox{font-size:13px;color:var(--ink-soft);}
+  .helpbox li{margin-bottom:6px;}
+  .kicker{font-family:var(--mono);font-size:11px;letter-spacing:.1em;color:var(--ink-faint);text-transform:uppercase;margin-bottom:2px;}
+  .roster-line{display:flex;gap:8px;align-items:center;padding:7px 0;border-bottom:1px solid var(--border);}
+  .roster-line:last-child{border-bottom:none;}
+  .summary-block{border:1px solid var(--border);border-radius:12px;padding:14px 16px;margin-bottom:12px;}
+  .summary-block .sname{font-family:var(--serif);font-weight:700;font-size:15.5px;}
+  .modal-backdrop{
+    position:fixed;inset:0;background:rgba(10,14,20,.5);display:flex;align-items:center;justify-content:center;
+    z-index:1000;padding:20px;
+  }
+  .modal{background:var(--surface);border-radius:var(--radius);padding:22px;max-width:480px;width:100%;box-shadow:var(--shadow);border:1px solid var(--border);}
+  @media print {
+    .no-print{display:none !important;}
+    body{background:#fff;color:#000;}
+    .card{box-shadow:none;border:1px solid #ccc;}
+  }
+</style>
+</head>
+<body>
+<div id="app"></div>
+<div id="toast" class="toast"></div>
+<input type="file" id="importFileInput" accept="application/json" style="display:none">
+<script>
+(function(){
+"use strict";
+
+/* ============================== 유틸 ============================== */
+function uid(){ return Date.now().toString(36)+Math.random().toString(36).slice(2,9); }
+function nowISO(){ return new Date().toISOString(); }
+function escapeHtml(s){
+  return String(s==null?'':s).replace(/[&<>"']/g, function(c){
+    return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
+  });
+}
+function fmtDateTime(iso){
+  if(!iso) return '-';
+  var d = new Date(iso);
+  if(isNaN(d.getTime())) return '-';
+  var p = function(n){ return String(n).padStart(2,'0'); };
+  return d.getFullYear()+'.'+p(d.getMonth()+1)+'.'+p(d.getDate())+' '+p(d.getHours())+':'+p(d.getMinutes());
+}
+function fmtDate(iso){
+  if(!iso) return '-';
+  var d = new Date(iso);
+  if(isNaN(d.getTime())) return '-';
+  var p = function(n){ return String(n).padStart(2,'0'); };
+  return d.getFullYear()+'.'+p(d.getMonth()+1)+'.'+p(d.getDate());
+}
+function toDatetimeLocalValue(iso){
+  if(!iso) return '';
+  var d = new Date(iso);
+  if(isNaN(d.getTime())) return '';
+  var p = function(n){ return String(n).padStart(2,'0'); };
+  return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate())+'T'+p(d.getHours())+':'+p(d.getMinutes());
+}
+function fromDatetimeLocalValue(v){
+  if(!v) return null;
+  var d = new Date(v);
+  if(isNaN(d.getTime())) return null;
+  return d.toISOString();
+}
+function isPast(iso){
+  if(!iso) return false;
+  return new Date(iso).getTime() < Date.now();
+}
+function bytesToSize(b){
+  if(b<1024) return b+' B';
+  if(b<1024*1024) return (b/1024).toFixed(1)+' KB';
+  return (b/1024/1024).toFixed(1)+' MB';
+}
+function readFileAsDataURL(file){
+  return new Promise(function(resolve,reject){
+    var r = new FileReader();
+    r.onload = function(){ resolve(r.result); };
+    r.onerror = function(){ reject(r.error); };
+    r.readAsDataURL(file);
+  });
+}
+var MAX_FILE_BYTES = 4*1024*1024;
+function toast(msg){
+  var t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(toast._h);
+  toast._h = setTimeout(function(){ t.classList.remove('show'); }, 2600);
+}
+
+/* ============================== IndexedDB ============================== */
+var DB_NAME = 'inquiry_tracker_db_v1';
+var STORE = 'kv';
+var _db = null;
+function openDB(){
+  return new Promise(function(resolve,reject){
+    if(_db){ resolve(_db); return; }
+    if(!window.indexedDB){ reject(new Error('no-indexeddb')); return; }
+    var req = indexedDB.open(DB_NAME, 1);
+    req.onupgradeneeded = function(e){
+      e.target.result.createObjectStore(STORE);
+    };
+    req.onsuccess = function(e){ _db = e.target.result; resolve(_db); };
+    req.onerror = function(e){ reject(e.target.error); };
+  });
+}
+function dbGet(key){
+  return openDB().then(function(db){
+    return new Promise(function(resolve,reject){
+      var tx = db.transaction(STORE,'readonly');
+      var r = tx.objectStore(STORE).get(key);
+      r.onsuccess = function(){ resolve(r.result); };
+      r.onerror = function(){ reject(r.error); };
+    });
+  });
+}
+function dbSet(key,val){
+  return openDB().then(function(db){
+    return new Promise(function(resolve,reject){
+      var tx = db.transaction(STORE,'readwrite');
+      var r = tx.objectStore(STORE).put(val,key);
+      r.onsuccess = function(){ resolve(); };
+      r.onerror = function(){ reject(r.error); };
+    });
+  });
+}
+
+/* ============================== 상태 모델 ============================== */
+var STAGE_ORDER = ['stage1','stage2','stage3','final'];
+var STAGE_INFO = {
+  stage1: {num:'1', label:'탐구 주제 선정', hint:'탐구하고 싶은 주제와 그 이유를 적어보세요. 선생님의 피드백을 받은 뒤에는 이전 내용을 지우지 말고, 구체화된 내용을 새로 이어서 기록하세요.'},
+  stage2: {num:'2', label:'탐구 방향 및 목차', hint:'승인된 주제를 바탕으로 서론·본론·결론의 방향과 목차(개요)를 작성하세요.'},
+  stage3: {num:'3', label:'탐구 진행 및 보완', hint:'실제 조사·실험·자료 분석을 진행하며 항목별로 자료와 설명을 누적해서 기록하세요.'},
+  final:  {num:'', label:'최종 탐구 결과물', hint:'서론-본론-결론을 갖춘 최종 결과물과 참고 자료를 제출하세요.'}
+};
+function defaultState(){
+  var t = nowISO();
+  return {
+    version:1,
+    meta:{
+      subjectName:'개별 탐구 활동',
+      className:'',
+      teacherPasscode:null,
+      createdAt:t, updatedAt:t
+    },
+    deadlines:{ stage1:null, stage2:null, stage3:null, final:null },
+    students:{}
+  };
+}
+function newStudent(studentId,name){
+  return {
+    studentId:studentId, name:name,
+    stageStatus:{ stage1:'open', stage2:'locked', stage3:'locked', final:'locked' },
+    timeline:[],
+    presentationEligible:false
+  };
+}
+function stageRank(status){
+  return {locked:0, open:1, submitted:2, approved:3}[status] || 0;
+}
+function touchMeta(){ STATE.meta.updatedAt = nowISO(); }
+
+var STATE = null;
+var SAVE_TIMER = null;
+function saveState(immediate){
+  touchMeta();
+  if(immediate){ return dbSet('state', STATE); }
+  clearTimeout(SAVE_TIMER);
+  return new Promise(function(resolve){
+    SAVE_TIMER = setTimeout(function(){ dbSet('state', STATE).then(resolve); }, 150);
+  });
+}
+
+/* ============================== 뷰 상태 ============================== */
+var VIEW = { screen:'home', role:null, studentId:null, teacherAuthed:false };
+var DRAFTS = {
+  stageForm:{}, // stage -> {mainText, items:[{title,description,files:[]}]}
+  feedback:{},  // stage -> text
+  roster:'',    // bulk add textarea
+  newStudentId:'', newStudentName:'',
+  loginId:'', loginName:'',
+  deadlineInputs:{}, // stage -> datetime-local string
+  subjectName:'', className:'', passcodeInput:'', passcodeConfirm:'',
+  passcodeAttempt:'',
+  summaryOverrides:{} // studentId -> text (session-only edit buffer before save)
+};
+function freshStageDraft(){ return { mainText:'', items:[{title:'',description:'',files:[]}] }; }
+function getStageDraft(stage){
+  if(!DRAFTS.stageForm[stage]) DRAFTS.stageForm[stage] = freshStageDraft();
+  return DRAFTS.stageForm[stage];
+}
+function resetStageDraft(stage){ DRAFTS.stageForm[stage] = freshStageDraft(); }
+
+/* ============================== 렌더 루트 ============================== */
+function render(){
+  var app = document.getElementById('app');
+  app.innerHTML = renderScreen();
+  bindGlobalHandlers(app);
+}
+
+function renderScreen(){
+  switch(VIEW.screen){
+    case 'home': return screenHome();
+    case 'studentLogin': return screenStudentLogin();
+    case 'teacherAuth': return screenTeacherAuth();
+    case 'teacherSetup': return screenTeacherSetup();
+    case 'studentDashboard': return screenStudentDashboard();
+    case 'teacherDashboard': return screenTeacherDashboard();
+    case 'teacherStudentDetail': return screenTeacherStudentDetail();
+    case 'teacherSummary': return screenTeacherSummary();
+    default: return screenHome();
+  }
+}
+
+/* ============================== 공통 조각 ============================== */
+function masthead(whoLabel, opts){
+  opts = opts || {};
+  return '' +
+  '<div class="masthead">' +
+    '<div class="brand">' +
+      '<div class="subject">'+escapeHtml(STATE.meta.subjectName||'개별 탐구 활동')+'</div>' +
+      '<div class="sub">'+escapeHtml(STATE.meta.className||'학급 미설정')+' · 탐구 일지</div>' +
+    '</div>' +
+    '<div class="masthead-actions no-print">' +
+      (whoLabel ? '<span class="who"><span class="badge2">'+escapeHtml(whoLabel)+'</span></span>' : '') +
+      '<button data-action="open-help" class="small" title="도움말">도움말</button>' +
+      '<button data-action="export-state" class="small" title="백업 내보내기">내보내기</button>' +
+      '<button data-action="trigger-import" class="small" title="백업 불러오기">불러오기</button>' +
+      (opts.showHome!==false ? '<button data-action="go-home" class="small">처음으로</button>' : '') +
+    '</div>' +
+  '</div>';
+}
+
+function statusChip(status, extra){
+  var map = {
+    locked:{cls:'st-locked', label:'잠김'},
+    open:{cls:'st-open', label:'대기중'},
+    submitted:{cls:'st-submitted', label:'제출됨'},
+    approved:{cls:'st-approved', label:'승인됨'}
+  };
+  var m = map[status] || map.open;
+  var label = (extra&&extra.label) || m.label;
+  return '<span class="chip '+m.cls+'"><span class="dot"></span>'+escapeHtml(label)+'</span>';
+}
+
+function fileChip(f){
+  var isImg = f.mime && f.mime.indexOf('image/')===0;
+  return '<button type="button" class="file-chip" data-action="download-file" data-filechip-src="'+f.dataUrl+'" data-filechip-name="'+escapeHtml(f.name)+'" title="'+escapeHtml(f.name)+' 저장">' +
+    (isImg ? '<img src="'+f.dataUrl+'" alt="">' : '<span class="ic">📎</span>') +
+    '<span>'+escapeHtml(f.name)+'</span>' +
+  '</button>';
+}
+
+function timelineEntryHtml(entry){
+  var typeLabel = {submission:'제출', feedback:'피드백', approval:'승인', reopen:'재검토 요청'}[entry.type] || entry.type;
+  var authorLabel = entry.author==='teacher' ? '교사' : '학생';
+  var itemsHtml = '';
+  if(entry.items && entry.items.length){
+    itemsHtml = entry.items.map(function(it, idx){
+      var files = (it.files||[]).map(fileChip).join('');
+      if(!it.title && !it.description && !(it.files||[]).length) return '';
+      return '<div class="item-card">' +
+        '<div class="item-title">조사 항목 '+(idx+1)+(it.title? ' · '+escapeHtml(it.title):'')+'</div>' +
+        (it.description? '<div class="item-desc">'+escapeHtml(it.description)+'</div>' : '') +
+        (files? '<div class="file-list">'+files+'</div>' : '') +
+      '</div>';
+    }).join('');
+  }
+  return '<div class="entry type-'+entry.type+'">' +
+    '<div class="entry-meta"><span class="entry-author">'+authorLabel+(entry.authorName? ' · '+escapeHtml(entry.authorName):'')+'</span>' +
+      '<span>· '+typeLabel+'</span>' +
+      '<span class="mono">· '+fmtDateTime(entry.ts)+'</span>' +
+      (entry.late? '<span class="chip st-late" style="margin-left:4px;"><span class="dot"></span>기한 초과</span>' : '') +
+    '</div>' +
+    (entry.mainText? '<div class="entry-text">'+escapeHtml(entry.mainText)+'</div>' : '') +
+    itemsHtml +
+  '</div>';
+}
+
+function helpModal(){
+  return '<div class="modal-backdrop no-print" data-action="close-help">' +
+    '<div class="modal" onclick="event.stopPropagation()">' +
+      '<h3>이 페이지 사용법</h3>' +
+      '<div class="helpbox">' +
+      '<p>이 페이지는 서버 없이 동작하는 <b>단일 HTML 파일</b>입니다. 같은 컴퓨터(예: 교실 공용 PC)에서 학생과 교사가 함께 사용하면 자동으로 기록이 쌓이지만, 각자 다른 기기(집 컴퓨터, 개인 노트북 등)에서 접속하면 저장 공간이 서로 달라 데이터가 자동으로 공유되지 않습니다.</p>' +
+      '<p>여러 기기에서 사용할 때는 다음 순서를 따르세요.</p>' +
+      '<ol>' +
+        '<li>교사가 학급 설정(과목명·학생 명단·제출 기한)을 마친 뒤 <b>내보내기</b>로 백업 파일(.json)을 만들어 학생들과 공유합니다.</li>' +
+        '<li>학생은 그 파일을 <b>불러오기 → 전체 덮어쓰기</b>로 불러온 뒤, 자신의 탐구 내용을 기록합니다.</li>' +
+        '<li>학생은 작업 후 <b>내보내기</b>로 자신의 진행 파일을 저장해 교사에게 제출(메신저·학급 게시판 등)합니다.</li>' +
+        '<li>교사는 학생이 보낸 파일을 <b>불러오기 → 학생 기록만 병합</b>으로 불러와 확인하고 피드백을 남긴 뒤, 다시 내보내 학생에게 돌려줍니다.</li>' +
+      '</ol>' +
+      '<p>같은 브라우저를 계속 사용한다면(예: 교실 공용 기기, 또는 학생 개인 기기를 학기 내내 그대로 사용) 이 과정 없이 자동으로 기록이 누적됩니다. 모든 자료는 이 페이지를 여는 기기에만 저장되므로, 주기적으로 <b>내보내기</b>로 백업해 두는 것을 권장합니다.</p>' +
+      '</div>' +
+      '<div style="text-align:right;margin-top:14px;"><button data-action="close-help" class="primary small">닫기</button></div>' +
+    '</div>' +
+  '</div>';
+}
+
+/* ============================== 홈 화면 ============================== */
+function screenHome(){
+  return '' +
+  '<div class="home-hero">' +
+    '<div class="eyebrow">Individual Inquiry Log</div>' +
+    '<h1>'+escapeHtml(STATE.meta.subjectName||'개별 탐구 활동')+'</h1>' +
+    '<p class="muted">'+(STATE.meta.className? escapeHtml(STATE.meta.className)+' · ':'')+'주제 선정부터 최종 결과물까지, 피드백과 함께 누적되는 탐구 일지</p>' +
+  '</div>' +
+  '<div class="role-grid">' +
+    '<div class="role-card" data-action="enter-student">' +
+      '<div class="tag">Student</div><h3>학생으로 시작</h3>' +
+      '<p>학번과 이름으로 들어가 나의 탐구 활동을 기록합니다.</p>' +
+    '</div>' +
+    '<div class="role-card" data-action="enter-teacher">' +
+      '<div class="tag">Teacher</div><h3>교사로 시작</h3>' +
+      '<p>학급을 관리하고 학생 활동에 피드백을 남깁니다.</p>' +
+    '</div>' +
+  '</div>' +
+  '<div class="card tight no-print">' +
+    '<div class="hgroup"><h4 style="margin:0;">이 페이지에 대해</h4></div>' +
+    '<div class="helpbox">이 페이지는 별도 서버 없이 하나의 HTML 파일로 동작합니다. 처음 사용한다면 상단 <button class="link-btn" data-action="open-help">도움말</button>을 먼저 읽어보세요.</div>' +
+  '</div>';
+}
+
+/* ============================== 학생 로그인 ============================== */
+function screenStudentLogin(){
+  return masthead(null) +
+  '<div class="backlink no-print"><button class="ghost small" data-action="go-home">← 처음으로</button></div>' +
+  '<div class="card" style="max-width:420px;margin:0 auto;">' +
+    '<h3>학생 입장</h3>' +
+    '<p class="faint">학번과 이름을 입력하세요. 처음 접속하는 경우 자동으로 등록됩니다.</p>' +
+    '<form data-form="student-login">' +
+      '<div class="field"><label>학번</label><input name="studentId" placeholder="예: 10305" value="'+escapeHtml(DRAFTS.loginId)+'" required></div>' +
+      '<div class="field"><label>이름</label><input name="name" placeholder="예: 홍길동" value="'+escapeHtml(DRAFTS.loginName)+'" required></div>' +
+      '<button type="submit" class="primary" style="width:100%;">입장하기</button>' +
+    '</form>' +
+  '</div>';
+}
+
+/* ============================== 교사 인증 ============================== */
+function screenTeacherAuth(){
+  if(!STATE.meta.teacherPasscode){ VIEW.screen='teacherSetup'; return screenTeacherSetup(); }
+  return masthead(null) +
+  '<div class="backlink no-print"><button class="ghost small" data-action="go-home">← 처음으로</button></div>' +
+  '<div class="card" style="max-width:380px;margin:0 auto;">' +
+    '<h3>교사 인증</h3>' +
+    '<p class="faint">학급 설정 시 지정한 비밀번호를 입력하세요.</p>' +
+    '<form data-form="teacher-auth">' +
+      '<div class="field"><label>비밀번호</label><input type="password" name="passcode" value="'+escapeHtml(DRAFTS.passcodeAttempt)+'" required></div>' +
+      '<button type="submit" class="primary" style="width:100%;">확인</button>' +
+    '</form>' +
+    '<p class="faint" style="margin-top:10px;">비밀번호를 잊었다면 <button class="link-btn" data-action="reset-passcode-hint">여기</button>를 확인하세요.</p>' +
+  '</div>';
+}
+
+function screenTeacherSetup(){
+  var isFirstTime = !STATE.meta.teacherPasscode;
+  return masthead(null) +
+  '<div class="backlink no-print"><button class="ghost small" data-action="go-home">← 처음으로</button></div>' +
+  '<div class="card" style="max-width:520px;margin:0 auto;">' +
+    '<h3>'+(isFirstTime? '학급 최초 설정' : '학급 정보 수정')+'</h3>' +
+    (isFirstTime? '<p class="faint">과목명과 비밀번호를 설정하면 교사 관리 화면을 사용할 수 있습니다.</p>' : '') +
+    '<form data-form="teacher-setup">' +
+      '<div class="field"><label>과목명</label><input name="subjectName" value="'+escapeHtml(STATE.meta.subjectName)+'" placeholder="예: 한국지리 개별 탐구 활동" required></div>' +
+      '<div class="field"><label>학급명</label><input name="className" value="'+escapeHtml(STATE.meta.className)+'" placeholder="예: 1학년 3반"></div>' +
+      '<div class="field"><label>'+(isFirstTime?'비밀번호 설정':'비밀번호 변경 (선택)')+'</label><input type="password" name="passcode" placeholder="'+(isFirstTime?'교사 확인용 비밀번호':'변경하지 않으려면 비워두세요')+'" '+(isFirstTime?'required':'')+'></div>' +
+      '<button type="submit" class="primary" style="width:100%;">'+(isFirstTime?'설정 완료':'저장')+'</button>' +
+    '</form>' +
+  '</div>';
+}
+
+/* ============================== 교사 대시보드 ============================== */
+function computeLateFlagForFinal(student){
+  var dl = STATE.deadlines.final;
+  if(!dl) return false;
+  var subs = student.timeline.filter(function(e){ return e.stage==='final' && e.type==='submission'; });
+  if(!subs.length) return false;
+  return subs.every(function(e){ return new Date(e.ts).getTime() > new Date(dl).getTime(); });
+}
+
+function screenTeacherDashboard(){
+  var ids = Object.keys(STATE.students).sort();
+  var rows = ids.map(function(id){
+    var s = STATE.students[id];
+    var cells = STAGE_ORDER.map(function(st){
+      var status = s.stageStatus[st];
+      var lateBadge = '';
+      if(st==='final' && status==='submitted' && !s.presentationEligible){
+        return '<td>'+statusChip('submitted',{label:'제출(기한초과)'})+'</td>';
+      }
+      return '<td>'+statusChip(status)+'</td>';
+    }).join('');
+    return '<tr class="clickable" data-action="open-student" data-id="'+escapeHtml(id)+'">' +
+      '<td class="mono">'+escapeHtml(id)+'</td><td>'+escapeHtml(s.name)+'</td>'+cells+
+      '<td>'+(s.presentationEligible? '<span class="chip st-approved"><span class="dot"></span>발표 가능</span>' : '<span class="chip st-open"><span class="dot"></span>-</span>')+'</td>' +
+    '</tr>';
+  }).join('');
+
+  var deadlineFields = STAGE_ORDER.map(function(st){
+    var val = DRAFTS.deadlineInputs[st] !== undefined ? DRAFTS.deadlineInputs[st] : toDatetimeLocalValue(STATE.deadlines[st]);
+    return '<div class="field"><label>'+STAGE_INFO[st].num+(STAGE_INFO[st].num?'차 · ':'')+STAGE_INFO[st].label+' 기한</label>' +
+      '<input type="datetime-local" data-deadline-stage="'+st+'" value="'+val+'"></div>';
+  }).join('');
+
+  return masthead('교사') +
+  '<div class="card">' +
+    '<div class="hgroup"><h3 style="margin:0;">단계별 제출 기한</h3><button class="small" data-action="edit-subject">학급 정보 수정</button></div>' +
+    '<form data-form="deadlines">' +
+      '<div class="row">'+deadlineFields+'</div>' +
+      '<button type="submit" class="primary">기한 저장</button>' +
+    '</form>' +
+  '</div>' +
+  '<div class="card">' +
+    '<div class="hgroup"><h3 style="margin:0;">학생 명단 ('+ids.length+'명)</h3>' +
+      '<button class="small" data-action="show-summary">발표·세특 요약 보기</button></div>' +
+    (ids.length===0 ? '<p class="faint">아직 등록된 학생이 없습니다. 아래에서 추가하세요.</p>' : '') +
+    (ids.length? '<div class="table-wrap"><table><thead><tr><th>학번</th><th>이름</th><th>1차</th><th>2차</th><th>3차</th><th>최종</th><th>발표</th></tr></thead><tbody>'+rows+'</tbody></table></div>' : '') +
+  '</div>' +
+  '<div class="card">' +
+    '<h4>학생 추가</h4>' +
+    '<div class="row">' +
+      '<form data-form="add-student" class="row" style="flex:3;">' +
+        '<div class="field" style="min-width:120px;"><label>학번</label><input name="studentId" placeholder="10305" value="'+escapeHtml(DRAFTS.newStudentId)+'"></div>' +
+        '<div class="field" style="min-width:120px;"><label>이름</label><input name="name" placeholder="홍길동" value="'+escapeHtml(DRAFTS.newStudentName)+'"></div>' +
+        '<div class="field" style="flex:0;align-self:end;"><button type="submit" class="primary">추가</button></div>' +
+      '</form>' +
+    '</div>' +
+    '<div class="field"><label>일괄 추가 (한 줄에 "학번,이름")</label>' +
+      '<textarea data-bind="roster" placeholder="10301,김민준&#10;10302,이서연">'+escapeHtml(DRAFTS.roster)+'</textarea></div>' +
+    '<button class="small" data-action="bulk-add-students">일괄 추가</button>' +
+  '</div>';
+}
+
+/* ============================== 교사 - 학생 상세 ============================== */
+function stageActionsForTeacher(student, stage){
+  var status = student.stageStatus[stage];
+  var isFinal = stage==='final';
+  var actions = '';
+  if(!isFinal){
+    if(status==='submitted'){
+      actions += '<button class="small primary" data-action="approve-stage" data-stage="'+stage+'">이 단계 승인</button> ';
+    } else if(status==='approved'){
+      actions += '<button class="small ghost" data-action="reopen-stage" data-stage="'+stage+'">재검토 요청(다시 열기)</button> ';
+    }
+  }
+  return actions;
+}
+
+function screenTeacherStudentDetail(){
+  var student = STATE.students[VIEW.studentId];
+  if(!student){ VIEW.screen='teacherDashboard'; return screenTeacherDashboard(); }
+  var stagesHtml = STAGE_ORDER.map(function(stage){
+    var info = STAGE_INFO[stage];
+    var status = student.stageStatus[stage];
+    var entries = student.timeline.filter(function(e){ return e.stage===stage; });
+    var deadline = STATE.deadlines[stage];
+    var fbDraft = DRAFTS.feedback[stage+'|'+student.studentId] || '';
+    return '<div class="stage-block">' +
+      '<div class="stage-head">' +
+        '<div class="left">' +
+          (info.num? '<span class="stage-num">'+info.num+'</span>' : '<span class="stage-num">★</span>') +
+          '<div><div class="stage-title">'+escapeHtml(info.label)+'</div>' +
+          '<div class="stage-deadline">기한: '+fmtDateTime(deadline)+(isPast(deadline)&&status!=='approved'?' · <span style="color:var(--danger)">경과</span>':'')+'</div></div>' +
+        '</div>' +
+        '<div style="display:flex;align-items:center;gap:8px;">'+statusChip(status)+'</div>' +
+      '</div>' +
+      '<div class="stage-body '+(entries.length?'':'empty')+'">' +
+        (entries.length? entries.map(timelineEntryHtml).join('') : '아직 기록이 없습니다.') +
+        '<div style="margin-top:14px;border-top:1px solid var(--border);padding-top:12px;">' +
+          '<label>이 단계에 피드백 남기기</label>' +
+          '<textarea data-feedback-input="'+stage+'|'+student.studentId+'" placeholder="구체화가 필요한 부분, 칭찬할 점 등을 자유롭게 남기세요.">'+escapeHtml(fbDraft)+'</textarea>' +
+          '<div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap;">' +
+            '<button class="small primary" data-action="send-feedback" data-stage="'+stage+'">피드백 남기기</button>' +
+            stageActionsForTeacher(student, stage) +
+          '</div>' +
+        '</div>' +
+      '</div>' +
+    '</div>';
+  }).join('');
+
+  return masthead('교사') +
+  '<div class="backlink no-print"><button class="ghost small" data-action="back-to-dashboard">← 학생 명단</button></div>' +
+  '<div class="card tight">' +
+    '<div class="hgroup"><h3 style="margin:0;">'+escapeHtml(student.name)+' <span class="mono faint">('+escapeHtml(student.studentId)+')</span></h3>' +
+    (student.presentationEligible? '<span class="chip st-approved"><span class="dot"></span>발표 가능</span>' : '<span class="chip st-open"><span class="dot"></span>발표 대상 아님</span>') +
+    '</div>' +
+  '</div>' +
+  stagesHtml;
+}
+
+/* ============================== 교사 - 발표/세특 요약 ============================== */
+function generateSummaryText(student){
+  function lastMain(stage){
+    var subs = student.timeline.filter(function(e){ return e.stage===stage && e.type==='submission'; });
+    return subs.length? subs[subs.length-1].mainText : '';
+  }
+  function feedbackCount(stage){
+    return student.timeline.filter(function(e){ return e.stage===stage && e.type==='feedback'; }).length;
+  }
+  var topic = lastMain('stage1');
+  var outline = lastMain('stage2');
+  var progress = lastMain('stage3');
+  var final = lastMain('final');
+  var parts = [];
+  if(topic) parts.push('‘'+topic+'’을(를) 탐구 주제로 선정하고'+(feedbackCount('stage1')? ' 교사 피드백을 반영하여 주제를 구체화함.' : '함.'));
+  if(outline) parts.push('서론-본론-결론의 구조로 탐구 방향을 설정하고 목차를 구성함('+outline.slice(0,60)+(outline.length>60?'…':'')+').');
+  if(progress) parts.push('탐구를 진행하며 관련 자료를 조사하고 내용을 보완함('+progress.slice(0,60)+(progress.length>60?'…':'')+').');
+  if(final) parts.push('최종적으로 '+(student.presentationEligible? '기한 내 ':'')+'탐구 결과물을 완성함('+final.slice(0,80)+(final.length>80?'…':'')+').');
+  parts.push(student.presentationEligible? '2학기 기말고사 이후 학급 내 탐구 발표를 진행함.' : '최종 결과물 제출이 확인되지 않아 발표 대상에서 제외됨.');
+  if(!topic && !outline && !progress && !final) return escapeHtml(student.name)+' 학생은 아직 탐구 활동을 시작하지 않음.';
+  return escapeHtml(student.name)+' 학생은 '+parts.join(' ');
+}
+
+function screenTeacherSummary(){
+  var ids = Object.keys(STATE.students).sort();
+  var blocks = ids.map(function(id){
+    var s = STATE.students[id];
+    var text = DRAFTS.summaryOverrides[id];
+    if(text===undefined) text = generateSummaryText(s);
+    return '<div class="summary-block">' +
+      '<div class="hgroup"><span class="sname">'+escapeHtml(id)+' '+escapeHtml(s.name)+'</span>' +
+        (s.presentationEligible? statusChip('approved',{label:'발표 가능'}) : statusChip('open',{label:'발표 대상 아님'})) +
+      '</div>' +
+      '<textarea data-summary-input="'+id+'" style="min-height:70px;">'+escapeHtml(text)+'</textarea>' +
+      '<div style="margin-top:6px;display:flex;gap:8px;">' +
+        '<button class="small" data-action="regen-summary" data-id="'+id+'">다시 생성</button>' +
+        '<button class="small" data-action="copy-summary" data-id="'+id+'">복사</button>' +
+      '</div>' +
+    '</div>';
+  }).join('');
+  return masthead('교사') +
+  '<div class="backlink no-print"><button class="ghost small" data-action="back-to-dashboard">← 학생 명단</button></div>' +
+  '<div class="card">' +
+    '<div class="hgroup"><h3 style="margin:0;">발표자 명단 및 세특 요약 (학번순)</h3>' +
+      '<div style="display:flex;gap:8px;"><button class="small" data-action="export-summary">전체 텍스트 내보내기</button><button class="small" data-action="print-summary">인쇄</button></div></div>' +
+    '<p class="faint">아래 요약은 학생의 기록을 바탕으로 자동 생성된 초안입니다. 생활기록부 등록 전 내용을 검토·수정하세요.</p>' +
+  '</div>' +
+  (ids.length? blocks : '<div class="card"><p class="faint">등록된 학생이 없습니다.</p></div>');
+}
+
+/* ============================== 학생 대시보드 ============================== */
+function screenStudentDashboard(){
+  var student = STATE.students[VIEW.studentId];
+  if(!student){ VIEW.screen='home'; return screenHome(); }
+  var stagesHtml = STAGE_ORDER.map(function(stage, idx){
+    var info = STAGE_INFO[stage];
+    var status = student.stageStatus[stage];
+    var entries = student.timeline.filter(function(e){ return e.stage===stage; });
+    var deadline = STATE.deadlines[stage];
+    var editable = (status==='open' || status==='submitted');
+    var body = '';
+    if(entries.length) body += entries.map(timelineEntryHtml).join('');
+    else body += '<div class="faint" style="font-style:italic;margin-bottom:10px;">'+escapeHtml(info.hint)+'</div>';
+
+    if(status==='locked'){
+      body += '<div class="notice info">이전 단계가 승인되면 이 단계를 진행할 수 있습니다.</div>';
+    } else if(editable){
+      body += renderStageForm(stage, deadline);
+    } else if(status==='approved'){
+      body += '<div class="notice ok">이 단계는 승인되었습니다'+(stage!=='final'?'. 다음 단계를 진행하세요.':'.')+'</div>';
+    }
+    return '<div class="stage-block">' +
+      '<div class="stage-head">' +
+        '<div class="left">' +
+          (info.num? '<span class="stage-num">'+info.num+'</span>' : '<span class="stage-num">★</span>') +
+          '<div><div class="stage-title">'+escapeHtml(info.label)+'</div>' +
+            '<div class="stage-deadline">기한: '+fmtDateTime(deadline)+(isPast(deadline)&&status!=='approved'?' · <span style="color:var(--danger)">경과</span>':'')+'</div></div>' +
+        '</div>' +
+        '<div>'+statusChip(status)+'</div>' +
+      '</div>' +
+      '<div class="stage-body">'+body+'</div>' +
+    '</div>';
+  }).join('');
+
+  return masthead(student.studentId+' '+student.name) +
+  '<div class="backlink no-print"><button class="ghost small" data-action="go-home">← 로그아웃</button></div>' +
+  (student.presentationEligible ? '<div class="notice ok">최종 결과물을 기한 내에 제출했습니다. 2학기 기말고사 이후 학급 발표 대상입니다.</div>' : '') +
+  stagesHtml;
+}
+
+function renderStageForm(stage, deadline){
+  var draft = getStageDraft(stage);
+  var mainLabel = {stage1:'탐구 주제 및 선정 이유', stage2:'서론·본론·결론 방향 / 목차', stage3:'탐구 진행 내용', final:'최종 결과물 요약'}[stage];
+  var itemsHtml = draft.items.map(function(item, idx){
+    var files = item.files.map(function(f,fi){
+      return '<span class="draft-file-chip">'+escapeHtml(f.name)+' <button type="button" class="ghost" data-action="remove-draft-file" data-stage="'+stage+'" data-item="'+idx+'" data-file="'+fi+'">✕</button></span>';
+    }).join('');
+    return '<div class="form-item">' +
+      '<div class="form-item-head"><span class="num">조사 항목 '+(idx+1)+'</span>' +
+        (draft.items.length>1 ? '<button type="button" class="small ghost" data-action="remove-item" data-stage="'+stage+'" data-item="'+idx+'">항목 삭제</button>' : '') +
+      '</div>' +
+      '<div class="field"><label>제목</label><input data-item-field="title" data-stage="'+stage+'" data-item="'+idx+'" value="'+escapeHtml(item.title)+'" placeholder="예: 지형도 분석"></div>' +
+      '<div class="field"><label>자료 업로드</label><input type="file" multiple data-item-file="'+stage+'|'+idx+'"></div>' +
+      (files? '<div class="draft-file-list">'+files+'</div>' : '') +
+      '<div class="field" style="margin-top:8px;"><label>설명</label><textarea data-item-field="description" data-stage="'+stage+'" data-item="'+idx+'" placeholder="찾은 자료에 대한 설명을 적어주세요.">'+escapeHtml(item.description)+'</textarea></div>' +
+    '</div>';
+  }).join('');
+
+  return '<form data-form="stage-submit" data-stage="'+stage+'" style="margin-top:14px;border-top:1px solid var(--border);padding-top:14px;">' +
+    (isPast(deadline)? '<div class="notice warn">제출 기한이 지났습니다. 제출은 가능하지만 "기한 초과"로 표시됩니다'+(stage==='final'?' (발표 대상에서 제외될 수 있습니다).':'.') +'</div>' : '') +
+    '<div class="field"><label>'+mainLabel+'</label><textarea data-main-input="'+stage+'" placeholder="내용을 입력하세요">'+escapeHtml(draft.mainText)+'</textarea></div>' +
+    '<label>조사 항목</label>' +
+    itemsHtml +
+    '<button type="button" class="small ghost" data-action="add-item" data-stage="'+stage+'" style="margin-bottom:12px;">+ 조사 항목 추가</button>' +
+    '<div><button type="submit" class="primary">'+(stage==='final'?'최종 결과물 제출':'제출(이어서 기록)')+'</button></div>' +
+  '</form>';
+}
+
+/* ============================== 이벤트 바인딩 ============================== */
+function bindGlobalHandlers(app){
+  // click delegation
+  app.onclick = function(e){
+    var t = e.target.closest('[data-action]');
+    if(!t) return;
+    var action = t.getAttribute('data-action');
+    handleAction(action, t, e);
+  };
+  // input (no full re-render) for text fields that should not lose focus
+  app.oninput = function(e){
+    var el = e.target;
+    if(el.matches('[data-main-input]')){
+      var stage = el.getAttribute('data-main-input');
+      getStageDraft(stage).mainText = el.value;
+    } else if(el.matches('[data-item-field]')){
+      var stage2 = el.getAttribute('data-stage');
+      var idx = parseInt(el.getAttribute('data-item'),10);
+      var field = el.getAttribute('data-item-field');
+      getStageDraft(stage2).items[idx][field] = el.value;
+    } else if(el.matches('[data-bind="roster"]')){
+      DRAFTS.roster = el.value;
+    } else if(el.matches('[data-feedback-input]')){
+      DRAFTS.feedback[el.getAttribute('data-feedback-input')] = el.value;
+    } else if(el.matches('[data-summary-input]')){
+      DRAFTS.summaryOverrides[el.getAttribute('data-summary-input')] = el.value;
+    } else if(el.matches('input[name="studentId"]')){
+      if(VIEW.screen==='studentLogin') DRAFTS.loginId = el.value;
+      if(VIEW.screen==='teacherDashboard') DRAFTS.newStudentId = el.value;
+    } else if(el.matches('input[name="name"]')){
+      if(VIEW.screen==='studentLogin') DRAFTS.loginName = el.value;
+      if(VIEW.screen==='teacherDashboard') DRAFTS.newStudentName = el.value;
+    } else if(el.matches('input[name="passcode"]') && VIEW.screen==='teacherAuth'){
+      DRAFTS.passcodeAttempt = el.value;
+    } else if(el.matches('[data-deadline-stage]')){
+      DRAFTS.deadlineInputs[el.getAttribute('data-deadline-stage')] = el.value;
+    }
+  };
+  app.onchange = function(e){
+    var el = e.target;
+    if(el.matches('[data-item-file]')){
+      var parts = el.getAttribute('data-item-file').split('|');
+      var stage = parts[0], idx = parseInt(parts[1],10);
+      handleItemFiles(el, stage, idx);
+    }
+  };
+  app.onsubmit = function(e){
+    var form = e.target.closest('form');
+    if(!form) return;
+    e.preventDefault();
+    var kind = form.getAttribute('data-form');
+    handleForm(kind, form, e);
+  };
+}
+
+function handleItemFiles(inputEl, stage, idx){
+  var files = Array.prototype.slice.call(inputEl.files || []);
+  if(!files.length) return;
+  var oversized = files.filter(function(f){ return f.size > MAX_FILE_BYTES; });
+  var okFiles = files.filter(function(f){ return f.size <= MAX_FILE_BYTES; });
+  if(oversized.length){
+    toast('4MB를 초과하는 파일은 제외되었습니다: '+oversized.map(function(f){return f.name;}).join(', '));
+  }
+  Promise.all(okFiles.map(function(f){
+    return readFileAsDataURL(f).then(function(dataUrl){
+      return {name:f.name, mime:f.type, size:f.size, dataUrl:dataUrl};
+    });
+  })).then(function(results){
+    var draft = getStageDraft(stage);
+    draft.items[idx].files = draft.items[idx].files.concat(results);
+    inputEl.value = '';
+    render();
+  }).catch(function(){ toast('파일을 읽는 중 오류가 발생했습니다.'); });
+}
+
+function handleAction(action, el, e){
+  switch(action){
+    case 'go-home':
+      VIEW = { screen:'home', role:null, studentId:null, teacherAuthed:false };
+      render(); break;
+    case 'open-help':
+      showHelp(true); break;
+    case 'close-help':
+      showHelp(false); break;
+    case 'enter-student':
+      VIEW.screen='studentLogin'; render(); break;
+    case 'enter-teacher':
+      VIEW.screen = STATE.meta.teacherPasscode ? 'teacherAuth' : 'teacherSetup';
+      render(); break;
+    case 'reset-passcode-hint':
+      toast('안전을 위해 비밀번호는 저장 파일(json)에 남아있습니다. 관리자에게 백업 파일을 확인해 달라고 요청하세요.'); break;
+    case 'back-to-dashboard':
+      VIEW.screen='teacherDashboard'; render(); break;
+    case 'open-student':
+      VIEW.studentId = el.getAttribute('data-id'); VIEW.screen='teacherStudentDetail'; render(); break;
+    case 'edit-subject':
+      VIEW.screen='teacherSetup'; render(); break;
+    case 'show-summary':
+      DRAFTS.summaryOverrides = {}; VIEW.screen='teacherSummary'; render(); break;
+    case 'add-item': {
+      var stage = el.getAttribute('data-stage');
+      getStageDraft(stage).items.push({title:'',description:'',files:[]});
+      render(); break;
+    }
+    case 'remove-item': {
+      var stage2 = el.getAttribute('data-stage'), idx = parseInt(el.getAttribute('data-item'),10);
+      var draft = getStageDraft(stage2);
+      draft.items.splice(idx,1);
+      if(!draft.items.length) draft.items.push({title:'',description:'',files:[]});
+      render(); break;
+    }
+    case 'remove-draft-file': {
+      var stage3 = el.getAttribute('data-stage'), idx2 = parseInt(el.getAttribute('data-item'),10), fi = parseInt(el.getAttribute('data-file'),10);
+      getStageDraft(stage3).items[idx2].files.splice(fi,1);
+      render(); break;
+    }
+    case 'approve-stage': doApproveStage(el.getAttribute('data-stage')); break;
+    case 'reopen-stage': doReopenStage(el.getAttribute('data-stage')); break;
+    case 'send-feedback': doSendFeedback(el.getAttribute('data-stage')); break;
+    case 'bulk-add-students': doBulkAddStudents(); break;
+    case 'export-state': doExportState(); break;
+    case 'download-file': doDownloadFileChip(el); break;
+    case 'trigger-import': document.getElementById('importFileInput').click(); break;
+    case 'regen-summary': delete DRAFTS.summaryOverrides[el.getAttribute('data-id')]; render(); break;
+    case 'copy-summary': doCopySummary(el.getAttribute('data-id')); break;
+    case 'export-summary': doExportSummary(); break;
+    case 'print-summary': window.print(); break;
+    default: break;
+  }
+  if(action==='close-help' && e && e.target && e.target.classList.contains('modal-backdrop')===false){
+    // handled above
+  }
+}
+
+var HELP_OPEN = false;
+function showHelp(open){
+  HELP_OPEN = open;
+  var existing = document.querySelector('.modal-backdrop');
+  if(open && !existing){
+    document.getElementById('app').insertAdjacentHTML('beforeend', helpModal());
+  } else if(!open && existing){
+    existing.remove();
+  }
+}
+
+function handleForm(kind, form){
+  var fd = new FormData(form);
+  if(kind==='student-login'){
+    var id = (fd.get('studentId')||'').toString().trim();
+    var name = (fd.get('name')||'').toString().trim();
+    if(!id || !name){ toast('학번과 이름을 모두 입력하세요.'); return; }
+    if(!STATE.students[id]){
+      STATE.students[id] = newStudent(id, name);
+    } else if(STATE.students[id].name !== name){
+      toast('주의: 등록된 이름("'+STATE.students[id].name+'")과 다릅니다. 계속 진행합니다.');
+    }
+    VIEW.role='student'; VIEW.studentId=id; VIEW.screen='studentDashboard';
+    resetAllDrafts();
+    saveState(true).then(render);
+  } else if(kind==='teacher-auth'){
+    var pass = (fd.get('passcode')||'').toString();
+    if(pass === STATE.meta.teacherPasscode){
+      VIEW.teacherAuthed = true; VIEW.role='teacher'; VIEW.screen='teacherDashboard';
+      DRAFTS.passcodeAttempt='';
+      render();
+    } else {
+      toast('비밀번호가 올바르지 않습니다.');
+    }
+  } else if(kind==='teacher-setup'){
+    var subjectName = (fd.get('subjectName')||'').toString().trim() || '개별 탐구 활동';
+    var className = (fd.get('className')||'').toString().trim();
+    var passcode = (fd.get('passcode')||'').toString();
+    var isFirstTime = !STATE.meta.teacherPasscode;
+    STATE.meta.subjectName = subjectName;
+    STATE.meta.className = className;
+    if(passcode) STATE.meta.teacherPasscode = passcode;
+    else if(isFirstTime){ toast('비밀번호를 설정하세요.'); return; }
+    VIEW.teacherAuthed = true; VIEW.role='teacher'; VIEW.screen='teacherDashboard';
+    saveState(true).then(function(){ render(); toast('저장되었습니다.'); });
+  } else if(kind==='deadlines'){
+    STAGE_ORDER.forEach(function(st){
+      var v = form.querySelector('[data-deadline-stage="'+st+'"]').value;
+      STATE.deadlines[st] = fromDatetimeLocalValue(v);
+    });
+    DRAFTS.deadlineInputs = {};
+    saveState(true).then(function(){ render(); toast('기한이 저장되었습니다.'); });
+  } else if(kind==='add-student'){
+    var sid = (fd.get('studentId')||'').toString().trim();
+    var sname = (fd.get('name')||'').toString().trim();
+    if(!sid || !sname){ toast('학번과 이름을 입력하세요.'); return; }
+    if(STATE.students[sid]){ toast('이미 등록된 학번입니다.'); return; }
+    STATE.students[sid] = newStudent(sid, sname);
+    DRAFTS.newStudentId=''; DRAFTS.newStudentName='';
+    saveState(true).then(function(){ render(); toast('학생이 추가되었습니다.'); });
+  } else if(kind==='stage-submit'){
+    doSubmitStage(form.getAttribute('data-stage'));
+  }
+}
+
+function resetAllDrafts(){
+  DRAFTS.stageForm = {}; DRAFTS.feedback = {};
+}
+
+function currentTeacherName(){ return '교사'; }
+
+function doSubmitStage(stage){
+  var student = STATE.students[VIEW.studentId];
+  if(!student) return;
+  var draft = getStageDraft(stage);
+  var items = draft.items.filter(function(it){ return it.title || it.description || it.files.length; });
+  if(!draft.mainText.trim() && !items.length){
+    toast('내용을 입력하거나 조사 항목을 추가하세요.');
+    return;
+  }
+  var deadline = STATE.deadlines[stage];
+  var late = stage==='final' ? isPast(deadline) : false;
+  var entry = {
+    id: uid(), stage: stage, type:'submission', author:'student', authorName: student.name,
+    ts: nowISO(), mainText: draft.mainText.trim(), items: items, late: late
+  };
+  student.timeline.push(entry);
+  if(student.stageStatus[stage] !== 'approved'){
+    student.stageStatus[stage] = 'submitted';
+  }
+  if(stage==='final'){
+    student.presentationEligible = !late;
+  }
+  resetStageDraft(stage);
+  saveState(true).then(function(){ render(); toast('제출되었습니다.'); });
+}
+
+function doSendFeedback(stage){
+  var student = STATE.students[VIEW.studentId];
+  if(!student) return;
+  var key = stage+'|'+student.studentId;
+  var text = (DRAFTS.feedback[key]||'').trim();
+  if(!text){ toast('피드백 내용을 입력하세요.'); return; }
+  student.timeline.push({
+    id: uid(), stage: stage, type:'feedback', author:'teacher', authorName: currentTeacherName(),
+    ts: nowISO(), mainText: text, items: []
+  });
+  DRAFTS.feedback[key] = '';
+  saveState(true).then(function(){ render(); toast('피드백을 남겼습니다.'); });
+}
+
+function doApproveStage(stage){
+  var student = STATE.students[VIEW.studentId];
+  if(!student) return;
+  student.stageStatus[stage] = 'approved';
+  var i = STAGE_ORDER.indexOf(stage);
+  var next = STAGE_ORDER[i+1];
+  if(next && student.stageStatus[next]==='locked'){
+    student.stageStatus[next] = 'open';
+  }
+  student.timeline.push({
+    id: uid(), stage: stage, type:'approval', author:'teacher', authorName: currentTeacherName(),
+    ts: nowISO(), mainText: STAGE_INFO[stage].label+' 단계를 승인했습니다.'+(next? ' 다음 단계를 진행할 수 있습니다.':''), items:[]
+  });
+  saveState(true).then(function(){ render(); toast('승인되었습니다.'); });
+}
+
+function doReopenStage(stage){
+  var student = STATE.students[VIEW.studentId];
+  if(!student) return;
+  student.stageStatus[stage] = 'submitted';
+  student.timeline.push({
+    id: uid(), stage: stage, type:'reopen', author:'teacher', authorName: currentTeacherName(),
+    ts: nowISO(), mainText: STAGE_INFO[stage].label+' 단계에 대한 재검토를 요청했습니다.', items:[]
+  });
+  saveState(true).then(function(){ render(); toast('다시 열었습니다.'); });
+}
+
+function doBulkAddStudents(){
+  var lines = DRAFTS.roster.split('\n').map(function(l){return l.trim();}).filter(Boolean);
+  var added = 0;
+  lines.forEach(function(line){
+    var parts = line.split(',');
+    if(parts.length<2) return;
+    var id = parts[0].trim(), name = parts.slice(1).join(',').trim();
+    if(!id || !name) return;
+    if(!STATE.students[id]){ STATE.students[id] = newStudent(id,name); added++; }
+  });
+  DRAFTS.roster = '';
+  saveState(true).then(function(){ render(); toast(added+'명이 추가되었습니다.'); });
+}
+
+function doCopySummary(id){
+  var text = DRAFTS.summaryOverrides[id];
+  if(text===undefined) text = generateSummaryText(STATE.students[id]);
+  var ta = document.createElement('textarea');
+  ta.value = text.replace(/<[^>]+>/g,'');
+  document.body.appendChild(ta); ta.select();
+  try{ document.execCommand('copy'); toast('복사되었습니다.'); }
+  catch(err){ toast('복사에 실패했습니다. 직접 선택해 복사하세요.'); }
+  document.body.removeChild(ta);
+}
+
+function doExportSummary(){
+  var ids = Object.keys(STATE.students).sort();
+  var lines = ids.map(function(id){
+    var text = DRAFTS.summaryOverrides[id];
+    if(text===undefined) text = generateSummaryText(STATE.students[id]);
+    return '['+id+'] '+text;
+  });
+  var blob = new Blob([lines.join('\n\n')], {type:'text/plain;charset=utf-8'});
+  offerDownload((STATE.meta.subjectName||'탐구활동')+'_세특요약.txt', blob);
+}
+
+/**
+ * Offers a generated file to the person using this page. When the page is
+ * running inside the Claude Artifact viewer, plain <a download> / blob-URL
+ * clicks are inert there, so we first try the viewer's own "downloads"
+ * capability (window.claude.use('downloads')). When that isn't present —
+ * which is the normal case once this file is downloaded and opened directly
+ * in a browser, or hosted on an ordinary web server — we fall back to the
+ * classic anchor-click download, which works fine in that context.
+ */
+function offerDownload(filename, blob){
+  function classicDownload(){
+    try{
+      var url = URL.createObjectURL(blob);
+      var a = document.createElement('a');
+      a.href = url; a.download = filename;
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      setTimeout(function(){ URL.revokeObjectURL(url); }, 4000);
+      toast('파일을 저장했습니다.');
+    }catch(err){
+      toast('파일 저장에 실패했습니다. 이 페이지를 다운로드해 직접 열어서 다시 시도해 주세요.');
+    }
+  }
+  if(window.claude && typeof window.claude.use === 'function'){
+    window.claude.use('downloads').then(function(downloads){
+      if(!downloads){ classicDownload(); return; }
+      downloads.save({filename: filename, data: blob}).then(function(){
+        toast('저장되었습니다.');
+      }).catch(function(err){
+        if(err && err.code === 'declined'){ toast('저장이 취소되었습니다.'); return; }
+        classicDownload();
+      });
+    }).catch(classicDownload);
+  } else {
+    classicDownload();
+  }
+}
+
+function doExportState(){
+  var blob = new Blob([JSON.stringify(STATE, null, 0)], {type:'application/json'});
+  var d = new Date();
+  var fname = (STATE.meta.subjectName||'탐구활동').replace(/[^a-zA-Z0-9가-힣]/g,'_') + '_백업_' + fmtDate(d.toISOString()).replace(/\./g,'') + '.json';
+  offerDownload(fname, blob);
+}
+
+function doDownloadFileChip(el){
+  var dataUrl = el.getAttribute('data-filechip-src');
+  var filename = el.getAttribute('data-filechip-name') || 'file';
+  fetch(dataUrl).then(function(r){ return r.blob(); }).then(function(blob){
+    offerDownload(filename, blob);
+  }).catch(function(){ toast('파일을 여는 중 오류가 발생했습니다.'); });
+}
+
+/* ============================== 가져오기 / 병합 ============================== */
+function mergeImportedState(imported, mode){
+  if(mode==='overwrite'){
+    STATE = imported;
+    return;
+  }
+  // merge: keep local meta/deadlines, merge students only
+  if(!STATE.students) STATE.students = {};
+  Object.keys(imported.students||{}).forEach(function(id){
+    var incoming = imported.students[id];
+    var local = STATE.students[id];
+    if(!local){
+      STATE.students[id] = incoming;
+      return;
+    }
+    // merge timeline by id, dedup
+    var seen = {};
+    var merged = local.timeline.concat(incoming.timeline).filter(function(en){
+      if(seen[en.id]) return false;
+      seen[en.id] = true; return true;
+    }).sort(function(a,b){ return new Date(a.ts) - new Date(b.ts); });
+    local.timeline = merged;
+    // status: take the more advanced one per stage
+    STAGE_ORDER.forEach(function(st){
+      var a = local.stageStatus[st], b = (incoming.stageStatus||{})[st];
+      if(b && stageRank(b) > stageRank(a)) local.stageStatus[st] = b;
+    });
+    local.presentationEligible = local.presentationEligible || incoming.presentationEligible;
+    if(!local.name && incoming.name) local.name = incoming.name;
+  });
+}
+
+function handleImportFile(file){
+  var reader = new FileReader();
+  reader.onload = function(){
+    var data;
+    try{ data = JSON.parse(reader.result); }
+    catch(err){ toast('올바른 백업 파일이 아닙니다.'); return; }
+    if(!data || !data.meta || !data.students){ toast('올바른 백업 파일이 아닙니다.'); return; }
+    var mode = window.confirm(
+      '불러오기 방식을 선택하세요.\n\n[확인] = 전체 덮어쓰기 (이 파일의 학급 설정·학생 기록으로 완전히 교체)\n[취소] = 학생 기록만 병합 (현재 설정은 유지하고 학생별 기록만 합침)'
+    ) ? 'overwrite' : 'merge';
+    mergeImportedState(data, mode);
+    STAGE_ORDER.forEach(function(){});
+    saveState(true).then(function(){
+      VIEW = { screen:'home', role:null, studentId:null, teacherAuthed:false };
+      render();
+      toast(mode==='overwrite' ? '전체 데이터를 불러왔습니다.' : '학생 기록을 병합했습니다.');
+    });
+  };
+  reader.readAsText(file);
+}
+
+/* ============================== 초기화 ============================== */
+function init(){
+  document.getElementById('importFileInput').addEventListener('change', function(e){
+    var f = e.target.files && e.target.files[0];
+    if(f) handleImportFile(f);
+    e.target.value = '';
+  });
+  dbGet('state').then(function(saved){
+    STATE = saved || defaultState();
+    if(!STATE.students) STATE.students = {};
+    if(!STATE.deadlines) STATE.deadlines = {stage1:null,stage2:null,stage3:null,final:null};
+    render();
+  }).catch(function(){
+    STATE = defaultState();
+    render();
+    toast('이 브라우저는 저장 기능을 지원하지 않아 새로고침 시 기록이 사라질 수 있습니다.');
+  });
+}
+init();
+})();
+</script>
+</body>
+</html>
