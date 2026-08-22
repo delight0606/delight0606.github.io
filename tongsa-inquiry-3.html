@@ -1,0 +1,1792 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>탐구 일지</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Jua&family=Noto+Sans+KR:wght@400;500;700;900&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#F5F8FF;
+    --surface:#FFFFFF;
+    --surface-alt:#EAF1FF;
+    --border:#DCE6F7;
+    --ink:#20263A;
+    --ink-soft:#5C6784;
+    --ink-faint:#98A2BE;
+    --accent:#3D8BFF;
+    --accent2:#7C6BFF;
+    --accent-strong:#2F6FE0;
+    --accent-soft:#E4EFFF;
+    --accent-soft-border:#BFDBFF;
+    --amber:#F59E0B;
+    --amber-soft:#FFF3D6;
+    --amber-soft-border:#FBE3A4;
+    --danger:#F43F5E;
+    --danger-soft:#FFE3E8;
+    --danger-soft-border:#FFC2CE;
+    --locked:#9CA6BC;
+    --locked-soft:#EFF2F8;
+    --locked-soft-border:#DDE3EE;
+    --shadow: 0 2px 8px rgba(61,139,255,.07), 0 10px 26px rgba(32,38,58,.06);
+    --radius: 18px;
+    --heading: 'Jua', 'Noto Sans KR', sans-serif;
+    --sans: 'Noto Sans KR', -apple-system, 'Malgun Gothic', sans-serif;
+    --mono: 'JetBrains Mono', 'Roboto Mono', ui-monospace, monospace;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --bg:#12161F;
+      --surface:#1B2130;
+      --surface-alt:#232B3D;
+      --border:#323B52;
+      --ink:#EAF0FF;
+      --ink-soft:#A7B2CC;
+      --ink-faint:#727C99;
+      --accent:#5B9DFF;
+      --accent2:#9C8CFF;
+      --accent-strong:#7DB2FF;
+      --accent-soft:#1E2E4D;
+      --accent-soft-border:#2E4470;
+      --amber:#FFC24D;
+      --amber-soft:#3D3113;
+      --amber-soft-border:#5C481F;
+      --danger:#FF7A90;
+      --danger-soft:#3A1620;
+      --danger-soft-border:#5C2233;
+      --locked:#8791AC;
+      --locked-soft:#232A3A;
+      --locked-soft-border:#323B52;
+      --shadow: 0 2px 8px rgba(0,0,0,.25), 0 10px 30px rgba(0,0,0,.35);
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#12161F;
+    --surface:#1B2130;
+    --surface-alt:#232B3D;
+    --border:#323B52;
+    --ink:#EAF0FF;
+    --ink-soft:#A7B2CC;
+    --ink-faint:#727C99;
+    --accent:#5B9DFF;
+    --accent2:#9C8CFF;
+    --accent-strong:#7DB2FF;
+    --accent-soft:#1E2E4D;
+    --accent-soft-border:#2E4470;
+    --amber:#FFC24D;
+    --amber-soft:#3D3113;
+    --amber-soft-border:#5C481F;
+    --danger:#FF7A90;
+    --danger-soft:#3A1620;
+    --danger-soft-border:#5C2233;
+    --locked:#8791AC;
+    --locked-soft:#232A3A;
+    --locked-soft-border:#323B52;
+    --shadow: 0 2px 8px rgba(0,0,0,.25), 0 10px 30px rgba(0,0,0,.35);
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:var(--bg);
+    color:var(--ink);
+    font-family:var(--sans);
+    line-height:1.6;
+    -webkit-font-smoothing:antialiased;
+    -webkit-text-size-adjust:100%;
+  }
+  #app{
+    max-width:960px;
+    margin:0 auto;
+    padding:20px 18px 80px;
+    min-height:100vh;
+  }
+  ::selection{background:var(--accent-soft);}
+  a{color:var(--accent);}
+  h1,h2,h3,h4{font-family:var(--heading);font-weight:700;margin:0 0 6px;text-wrap:balance;color:var(--ink);}
+  p{margin:0 0 10px;}
+  .mono{font-family:var(--mono);font-variant-numeric:tabular-nums;}
+  .muted{color:var(--ink-soft);}
+  .faint{color:var(--ink-faint);font-size:13px;}
+  button, .btn{
+    font-family:var(--sans);
+    font-size:14.5px;
+    font-weight:700;
+    border-radius:999px;
+    border:1px solid var(--border);
+    background:var(--surface);
+    color:var(--ink);
+    padding:11px 18px;
+    cursor:pointer;
+    transition:transform .08s ease, background .15s ease, border-color .15s ease;
+    touch-action:manipulation;
+  }
+  button:hover{border-color:var(--accent);}
+  button:active{transform:scale(0.97);}
+  button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible{
+    outline:2px solid var(--accent); outline-offset:2px;
+  }
+  button.primary{background:var(--accent);color:#fff;border-color:var(--accent);box-shadow:0 4px 14px rgba(61,139,255,.28);}
+  button.primary:hover{background:var(--accent-strong);border-color:var(--accent-strong);}
+  button.ghost{background:transparent;}
+  button.danger{color:var(--danger);border-color:var(--danger-soft-border);}
+  button.danger:hover{border-color:var(--danger);}
+  button.small{padding:7px 14px;font-size:12.5px;border-radius:999px;}
+  button:disabled{opacity:.45;cursor:not-allowed;}
+  input, textarea, select{
+    font-family:var(--sans);
+    font-size:16px;
+    color:var(--ink);
+    background:var(--surface);
+    border:1px solid var(--border);
+    border-radius:9px;
+    padding:10px 11px;
+    width:100%;
+  }
+  @media (min-width:640px){ input, textarea, select{ font-size:14px; } }
+  textarea{min-height:88px;resize:vertical;line-height:1.55;}
+  label{display:block;font-size:12.5px;font-weight:700;color:var(--ink-soft);letter-spacing:.02em;margin-bottom:5px;}
+  .field{margin-bottom:14px;}
+  .row{display:flex;gap:10px;flex-wrap:wrap;}
+  .row > *{flex:1;min-width:160px;}
+
+  /* header / masthead */
+  .masthead{
+    display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;
+    background:linear-gradient(135deg, var(--accent), var(--accent2));color:#fff;border-radius:var(--radius);
+    padding:18px 22px;margin-bottom:18px;box-shadow:var(--shadow);
+  }
+  .masthead .brand{display:flex;flex-direction:column;gap:2px;}
+  .masthead .brand .subject{font-family:var(--heading);font-weight:400;font-size:22px;letter-spacing:.01em;}
+  .masthead .brand .sub{font-size:12.5px;opacity:.9;}
+  .masthead .who{display:flex;align-items:center;gap:8px;font-size:13px;}
+  .masthead .who .badge2{background:rgba(255,255,255,.16);border-radius:8px;padding:5px 10px;font-weight:600;}
+  .masthead-actions{display:flex;gap:8px;flex-wrap:wrap;}
+  .masthead-actions button{background:rgba(255,255,255,.12);color:#fff;border-color:rgba(255,255,255,.3);}
+  .masthead-actions button:hover{background:rgba(255,255,255,.22);border-color:#fff;}
+  @media (max-width:760px){
+    .masthead{flex-direction:column;align-items:stretch;}
+    .masthead-actions{justify-content:flex-start;}
+  }
+
+  .card{
+    background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);
+    padding:18px 20px;margin-bottom:16px;box-shadow:var(--shadow);
+  }
+  .card.tight{padding:14px 16px;}
+  .stack{display:flex;flex-direction:column;gap:14px;}
+  .hgroup{display:flex;align-items:baseline;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:10px;}
+
+  /* home */
+  .home-hero{text-align:center;padding:38px 10px 8px;}
+  .home-hero .eyebrow{display:inline-block;font-size:13px;font-weight:700;letter-spacing:.02em;color:var(--accent);background:var(--accent-soft);border-radius:999px;padding:5px 14px;}
+  .home-hero h1{font-family:var(--heading);font-weight:400;font-size:34px;margin-top:12px;}
+  .role-grid{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin:24px 0;}
+  @media (max-width:600px){.role-grid{grid-template-columns:1fr;}}
+  .role-card{
+    background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);
+    padding:28px 24px;text-align:left;cursor:pointer;box-shadow:var(--shadow);
+    display:flex;flex-direction:column;gap:8px;transition:border-color .15s ease, transform .1s ease;
+  }
+  .role-card:hover{border-color:var(--accent);transform:translateY(-3px);}
+  .role-card .icon{font-size:34px;width:56px;height:56px;display:flex;align-items:center;justify-content:center;background:var(--accent-soft);border-radius:16px;margin-bottom:4px;}
+  .role-card:nth-child(2) .icon{background:var(--amber-soft);}
+  .role-card .tag{font-size:11.5px;font-weight:700;letter-spacing:.06em;color:var(--ink-faint);text-transform:uppercase;}
+  .role-card h3{font-family:var(--heading);font-weight:400;font-size:23px;margin-bottom:2px;}
+  .role-card p{color:var(--ink-soft);font-size:13.5px;margin:0;}
+
+  /* status chip */
+  .chip{
+    display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:700;
+    padding:4px 10px 4px 8px;border-radius:999px;border:1px solid; white-space:nowrap;
+  }
+  .chip .dot{width:7px;height:7px;border-radius:50%;display:inline-block;}
+  .chip.st-locked{background:var(--locked-soft);border-color:var(--locked-soft-border);color:var(--locked);}
+  .chip.st-locked .dot{background:var(--locked);}
+  .chip.st-open{background:var(--surface-alt);border-color:var(--border);color:var(--ink-soft);}
+  .chip.st-open .dot{background:var(--ink-faint);}
+  .chip.st-submitted{background:var(--amber-soft);border-color:var(--amber-soft-border);color:var(--amber);}
+  .chip.st-submitted .dot{background:var(--amber);}
+  .chip.st-approved{background:var(--accent-soft);border-color:var(--accent-soft-border);color:var(--accent);}
+  .chip.st-approved .dot{background:var(--accent);}
+  .chip.st-late{background:var(--danger-soft);border-color:var(--danger-soft-border);color:var(--danger);}
+  .chip.st-late .dot{background:var(--danger);}
+
+  /* stage timeline */
+  .stage-block{border:1px solid var(--border);border-radius:var(--radius);margin-bottom:14px;overflow:hidden;}
+  .stage-head{
+    display:flex;align-items:center;gap:12px;padding:14px 18px;background:var(--surface-alt);
+    flex-wrap:wrap;justify-content:space-between;
+  }
+  .stage-head .left{display:flex;align-items:center;gap:12px;flex-wrap:wrap;}
+  .stage-head .right{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+  .stage-num{
+    font-family:var(--heading);font-weight:900;font-size:15px;color:var(--accent);
+    background:var(--accent-soft);border:1px solid var(--accent-soft-border);
+    width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0;
+  }
+  .stage-title{font-family:var(--heading);font-weight:700;font-size:16px;}
+  .stage-deadline{font-size:12.5px;color:var(--ink-soft);font-family:var(--mono);}
+  .stage-body{padding:16px 18px;background:var(--surface);}
+  .stage-body.empty{color:var(--ink-faint);font-size:13.5px;font-style:italic;}
+
+  /* stage stepper (student dashboard progress guide) */
+  .stepper{display:flex;align-items:flex-start;gap:0;margin-bottom:18px;overflow-x:auto;-webkit-overflow-scrolling:touch;padding:2px;}
+  .stepper-step{display:flex;flex-direction:column;align-items:center;flex:1;min-width:92px;position:relative;text-align:center;}
+  .stepper-step:not(:last-child)::after{
+    content:'';position:absolute;top:19px;left:calc(50% + 24px);right:calc(-50% + 24px);height:3px;
+    background:var(--border);z-index:0;
+  }
+  .stepper-step.done:not(:last-child)::after{background:var(--accent);}
+  .stepper-circle{
+    width:38px;height:38px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+    font-size:17px;font-weight:700;background:var(--locked-soft);border:2px solid var(--locked-soft-border);
+    color:var(--locked);position:relative;z-index:1;
+  }
+  .stepper-step.current .stepper-circle{background:var(--accent-soft);border-color:var(--accent);color:var(--accent);}
+  .stepper-step.done .stepper-circle{background:var(--accent);border-color:var(--accent);color:#fff;}
+  .stepper-label{font-size:12px;font-weight:700;color:var(--ink-soft);margin-top:6px;line-height:1.3;}
+  .stepper-step.current .stepper-label{color:var(--accent);}
+
+  .save-hint{font-size:12px;color:var(--ink-faint);margin:-6px 0 12px;display:flex;align-items:center;gap:5px;}
+  .hint-small{font-size:12px;color:var(--ink-faint);margin-top:-3px;margin-bottom:8px;transition:opacity .15s ease;}
+  .hint-small.hidden{display:none;}
+  .item-type-badge{display:inline-flex;align-items:center;gap:4px;font-size:11.5px;font-weight:700;border-radius:999px;padding:2px 9px;margin-left:6px;background:var(--amber-soft);color:var(--amber);border:1px solid var(--amber-soft-border);}
+
+  .entry{border-left:3px solid var(--border);padding:4px 0 4px 14px;margin-bottom:14px;position:relative;}
+  .entry:last-child{margin-bottom:0;}
+  .entry.type-feedback{border-left-color:var(--amber);}
+  .entry.type-submission{border-left-color:var(--accent);}
+  .entry.type-approval{border-left-color:var(--accent);}
+  .entry .entry-meta{display:flex;gap:8px;align-items:center;font-size:12px;color:var(--ink-faint);margin-bottom:4px;flex-wrap:wrap;}
+  .entry .entry-author{font-weight:700;color:var(--ink-soft);}
+  .entry .entry-text{white-space:pre-wrap;font-size:14px;}
+  .item-card{
+    background:var(--surface-alt);border:1px solid var(--border);border-radius:10px;
+    padding:10px 12px;margin-top:8px;
+  }
+  .item-card.tool-card{border-left:3px solid var(--amber);}
+  .item-card .item-title{font-weight:700;font-size:13.5px;margin-bottom:3px;}
+  .item-card .item-desc{white-space:pre-wrap;font-size:13.5px;color:var(--ink-soft);}
+  .file-list{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px;}
+  .file-chip{
+    display:flex;align-items:center;gap:6px;background:var(--surface);border:1px solid var(--border);
+    border-radius:8px;padding:5px 9px;font-size:12px;text-decoration:none;color:var(--ink);
+  }
+  .file-chip img{width:20px;height:20px;object-fit:cover;border-radius:4px;}
+  .file-chip .ic{font-size:14px;}
+
+  .form-item{border:1px dashed var(--border);border-radius:10px;padding:12px;margin-bottom:10px;background:var(--surface-alt);}
+  .form-item.tool-item{border-color:var(--amber-soft-border);}
+  .form-item-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;}
+  .form-item-head .num{font-family:var(--mono);font-size:12px;color:var(--ink-faint);}
+  .draft-file-list{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;}
+  .draft-file-chip{display:flex;align-items:center;gap:5px;background:var(--surface);border:1px solid var(--border);border-radius:7px;padding:4px 7px;font-size:11.5px;}
+  .draft-file-chip button{padding:1px 5px;font-size:11px;border-radius:5px;}
+
+  table{width:100%;border-collapse:collapse;font-size:13.5px;}
+  th,td{text-align:left;padding:9px 10px;border-bottom:1px solid var(--border);}
+  th{font-size:12px;text-transform:uppercase;letter-spacing:.04em;color:var(--ink-faint);font-weight:700;}
+  tr.clickable{cursor:pointer;}
+  tr.clickable:hover td{background:var(--surface-alt);}
+  .table-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;}
+
+  .notice{
+    border-radius:10px;padding:12px 14px;font-size:13.5px;margin-bottom:12px;border:1px solid;
+  }
+  .notice.info{background:var(--surface-alt);border-color:var(--border);color:var(--ink-soft);}
+  .notice.warn{background:var(--amber-soft);border-color:var(--amber-soft-border);color:var(--amber);}
+  .notice.danger{background:var(--danger-soft);border-color:var(--danger-soft-border);color:var(--danger);}
+  .notice.ok{background:var(--accent-soft);border-color:var(--accent-soft-border);color:var(--accent);}
+  .teacher-only-tag{font-size:11px;font-family:var(--mono);letter-spacing:.06em;color:var(--ink-faint);text-transform:uppercase;}
+
+  .toast{
+    position:fixed;bottom:20px;left:50%;transform:translateX(-50%);
+    background:var(--ink);color:var(--bg);padding:11px 20px;border-radius:10px;font-size:13.5px;
+    box-shadow:var(--shadow);z-index:999;opacity:0;pointer-events:none;transition:opacity .25s ease, transform .25s ease;
+    max-width:90vw;text-align:center;
+  }
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(-4px);}
+
+  .link-btn{background:none;border:none;color:var(--accent);text-decoration:underline;padding:0;font-size:13px;cursor:pointer;}
+  .backlink{margin-bottom:14px;}
+  .helpbox{font-size:13px;color:var(--ink-soft);}
+  .helpbox li{margin-bottom:6px;}
+  .kicker{font-family:var(--mono);font-size:11px;letter-spacing:.1em;color:var(--ink-faint);text-transform:uppercase;margin-bottom:2px;}
+  .summary-block{border:1px solid var(--border);border-radius:12px;padding:14px 16px;margin-bottom:12px;}
+  .summary-block .sname{font-family:var(--heading);font-weight:700;font-size:15.5px;}
+  .modal-backdrop{
+    position:fixed;inset:0;background:rgba(10,14,20,.5);display:flex;align-items:center;justify-content:center;
+    z-index:1000;padding:20px;
+  }
+  .modal{background:var(--surface);border-radius:var(--radius);padding:22px;max-width:480px;width:100%;box-shadow:var(--shadow);border:1px solid var(--border);max-height:85vh;overflow-y:auto;}
+
+  /* reply threads */
+  .reply-thread{margin-top:10px;padding-left:16px;border-left:2px dashed var(--border);}
+  .reply-entry{margin-bottom:10px;font-size:13px;}
+  .reply-entry .reply-meta{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:2px;}
+  .reply-author{font-weight:700;color:var(--ink-soft);font-size:12.5px;}
+  .reply-text{white-space:pre-wrap;color:var(--ink);}
+  .reply-box{margin-top:8px;display:flex;flex-direction:column;gap:8px;}
+  .reply-box textarea{min-height:52px;}
+  .feedback-count-badge{font-size:11.5px;color:var(--ink-faint);}
+
+  @media print {
+    .no-print{display:none !important;}
+    body{background:#fff;color:#000;}
+    .card{box-shadow:none;border:1px solid #ccc;}
+  }
+</style>
+</head>
+<body>
+<div id="app"></div>
+<div id="toast" class="toast"></div>
+<input type="file" id="importFileInput" accept="application/json" style="display:none">
+<script>
+(function(){
+"use strict";
+
+/* ============================== 유틸 ============================== */
+function uid(){ return Date.now().toString(36)+Math.random().toString(36).slice(2,9); }
+function nowISO(){ return new Date().toISOString(); }
+function escapeHtml(s){
+  return String(s==null?'':s).replace(/[&<>"']/g, function(c){
+    return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
+  });
+}
+function fmtDateTime(iso){
+  if(!iso) return '-';
+  var d = new Date(iso);
+  if(isNaN(d.getTime())) return '-';
+  var p = function(n){ return String(n).padStart(2,'0'); };
+  return d.getFullYear()+'.'+p(d.getMonth()+1)+'.'+p(d.getDate())+' '+p(d.getHours())+':'+p(d.getMinutes());
+}
+function fmtDate(iso){
+  if(!iso) return '-';
+  var d = new Date(iso);
+  if(isNaN(d.getTime())) return '-';
+  var p = function(n){ return String(n).padStart(2,'0'); };
+  return d.getFullYear()+'.'+p(d.getMonth()+1)+'.'+p(d.getDate());
+}
+function toDatetimeLocalValue(iso){
+  if(!iso) return '';
+  var d = new Date(iso);
+  if(isNaN(d.getTime())) return '';
+  var p = function(n){ return String(n).padStart(2,'0'); };
+  return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate())+'T'+p(d.getHours())+':'+p(d.getMinutes());
+}
+function fromDatetimeLocalValue(v){
+  if(!v) return null;
+  var d = new Date(v);
+  if(isNaN(d.getTime())) return null;
+  return d.toISOString();
+}
+function isPast(iso){
+  if(!iso) return false;
+  return new Date(iso).getTime() < Date.now();
+}
+
+/* ============================== 비밀번호 해시 ============================== */
+// Passwords are never stored in plain text. This is a lightweight client-side
+// tool (no server, no real threat model beyond "classmates shouldn't be able
+// to open each other's records"), so a salted SHA-256 hash is enough — it
+// keeps a casual look at an exported backup .json from revealing anyone's
+// actual password. crypto.subtle needs a secure context (HTTPS, or a local
+// file:// page, both of which this app supports); a simple non-cryptographic
+// fallback keeps the feature working even where it isn't available.
+function randomSalt(){
+  var bytes = new Uint8Array(16);
+  (window.crypto || window.msCrypto).getRandomValues(bytes);
+  return Array.prototype.map.call(bytes, function(b){ return b.toString(16).padStart(2,'0'); }).join('');
+}
+function simpleHashFallback(text){
+  var h = 0;
+  for(var i=0;i<text.length;i++){ h = (Math.imul(31,h) + text.charCodeAt(i))|0; }
+  return 'fb_' + (h>>>0).toString(16);
+}
+function hashSecret(text){
+  if(window.crypto && window.crypto.subtle && window.isSecureContext !== false){
+    try{
+      return window.crypto.subtle.digest('SHA-256', new TextEncoder().encode(text)).then(function(buf){
+        return Array.prototype.map.call(new Uint8Array(buf), function(b){ return b.toString(16).padStart(2,'0'); }).join('');
+      }).catch(function(){ return simpleHashFallback(text); });
+    }catch(err){ return Promise.resolve(simpleHashFallback(text)); }
+  }
+  return Promise.resolve(simpleHashFallback(text));
+}
+function hashPassword(password, salt){ return hashSecret(salt+':'+password); }
+
+function readFileAsDataURL(file){
+  return new Promise(function(resolve,reject){
+    var r = new FileReader();
+    r.onload = function(){ resolve(r.result); };
+    r.onerror = function(){ reject(r.error); };
+    r.readAsDataURL(file);
+  });
+}
+var MAX_FILE_BYTES = 4*1024*1024;
+function toast(msg){
+  var t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(toast._h);
+  toast._h = setTimeout(function(){ t.classList.remove('show'); }, 2600);
+}
+
+/* ============================== IndexedDB ============================== */
+var DB_NAME = 'inquiry_tracker_db_v1';
+var STORE = 'kv';
+var _db = null;
+function openDB(){
+  return new Promise(function(resolve,reject){
+    if(_db){ resolve(_db); return; }
+    if(!window.indexedDB){ reject(new Error('no-indexeddb')); return; }
+    var req = indexedDB.open(DB_NAME, 1);
+    req.onupgradeneeded = function(e){
+      e.target.result.createObjectStore(STORE);
+    };
+    req.onsuccess = function(e){ _db = e.target.result; resolve(_db); };
+    req.onerror = function(e){ reject(e.target.error); };
+  });
+}
+function dbGet(key){
+  return openDB().then(function(db){
+    return new Promise(function(resolve,reject){
+      var tx = db.transaction(STORE,'readonly');
+      var r = tx.objectStore(STORE).get(key);
+      r.onsuccess = function(){ resolve(r.result); };
+      r.onerror = function(){ reject(r.error); };
+    });
+  });
+}
+function dbSet(key,val){
+  return openDB().then(function(db){
+    return new Promise(function(resolve,reject){
+      var tx = db.transaction(STORE,'readwrite');
+      var r = tx.objectStore(STORE).put(val,key);
+      r.onsuccess = function(){ resolve(); };
+      r.onerror = function(){ reject(r.error); };
+    });
+  });
+}
+
+/* ============================== 상태 모델 ============================== */
+// 1차(주제 선정) → 승인되면 '탐구 진행'과 '최종 결과물'이 동시에 열립니다.
+// '탐구 진행' 단계는 서론·본론·결론 방향/목차 수립부터 실제 조사까지를 포괄하며,
+// 교사 승인이 다음 단계를 여는 게이트 역할을 하지 않습니다 — 학생은 준비가 되면
+// 언제든(최소 0회, 최대 권장 3회의 선택적 피드백 이후) 최종 결과물을 제출할 수 있습니다.
+var STAGE_ORDER = ['stage1','research','final'];
+var STAGE_INFO = {
+  stage1: {num:'1', icon:'📝', shortLabel:'주제 선정', label:'① 탐구 주제 선정하기', hint:'🙂 어떤 것이 궁금한가요? 탐구하고 싶은 주제와 "왜 이 주제를 골랐는지" 이유를 편하게 적어보세요. 선생님이 피드백을 남겨주시면, 이전에 쓴 내용은 절대 지우지 말고 그 아래에 더 구체화된 내용을 이어서 적어주세요. 주제가 바뀌더라도 이전 기록은 그대로 남아있으니 걱정하지 마세요.'},
+  research: {num:'2', icon:'🔍', shortLabel:'탐구 진행', label:'② 탐구 진행하기', hint:'✅ 주제가 승인되었어요! 이제 서론(문제 제기)·본론(조사·분석)·결론(정리) 방향과 목차를 세우고, 실제로 조사한 내용을 이어서 기록해 주세요. 생성형 AI, 책, 교과서 등 활용한 도구가 있다면 아래에 함께 남겨주세요. 이 단계의 선생님 피드백은 선택 사항이고 최대 3회까지 받을 수 있어요 — 이미 자신 있다면 피드백 없이 바로 최종 결과물로 넘어가도 괜찮아요.'},
+  final:  {num:'', icon:'📄', shortLabel:'최종 제출', label:'③ 최종 결과물 제출하기', hint:'🎉 마지막 단계예요! 서론-본론-결론을 갖춘 최종 결과물을 정리해서 제출해 주세요. 탐구 진행 단계의 피드백 횟수와 관계없이, 준비가 되면 언제든 제출할 수 있어요.'}
+};
+var RECOMMENDED_MAX_RESEARCH_FEEDBACK = 3;
+var MAX_TEACHERS_HINT = 3;
+// Student login passwords: 6–10 characters, numbers and/or English letters only
+// (kept simple and typo-tolerant for classroom use; no special characters or Korean).
+var PASSWORD_REGEX = /^[A-Za-z0-9]{6,10}$/;
+var GRAPHIC_ITEM_TYPES = ['통계지도','표'];
+// 17 first-level Korean administrative divisions (시/도), current as of 2026
+// (includes the 강원특별자치도 / 전북특별자치도 renames).
+var REGION_LIST = [
+  '서울특별시','부산광역시','대구광역시','인천광역시','광주광역시','대전광역시','울산광역시',
+  '세종특별자치시','경기도','강원특별자치도','충청북도','충청남도','전북특별자치도','전라남도',
+  '경상북도','경상남도','제주특별자치도'
+];
+
+function defaultState(){
+  var t = nowISO();
+  return {
+    version:2,
+    meta:{
+      region:'',
+      schoolName:'',
+      subjectName:'개별 탐구 활동',
+      className:'',
+      teacherPasscode:null,
+      teachers:[],
+      createdAt:t, updatedAt:t
+    },
+    deadlines:{ stage1:null, research:null, final:null },
+    students:{}
+  };
+}
+function newStudent(studentId,name){
+  return {
+    studentId:studentId, name:name,
+    passwordHash:null, passwordSalt:null,
+    stageStatus:{ stage1:'open', research:'locked', final:'locked' },
+    timeline:[],
+    presentationEligible:false,
+    draft:{} // in-progress (not yet submitted) writing per stage — persisted so students can
+             // pick up writing again weeks/months later, exactly where they left off
+  };
+}
+function stageRank(status){
+  return {locked:0, open:1, submitted:2, approved:3}[status] || 0;
+}
+function touchMeta(){ STATE.meta.updatedAt = nowISO(); }
+
+/**
+ * Upgrades state saved by the earlier 4-stage version of this file
+ * (stage1/stage2/stage3/final) into the current 3-stage model
+ * (stage1/research/final), where stage2+stage3 are merged into one
+ * flexible "research" phase. Safe to call on already-current state (no-op).
+ */
+function migrateState(state){
+  var changed = false;
+  if(!state.meta.teachers){ state.meta.teachers = []; changed = true; }
+  if(state.meta.region===undefined){ state.meta.region = ''; changed = true; }
+  if(state.meta.schoolName===undefined){ state.meta.schoolName = ''; changed = true; }
+  Object.keys(state.students||{}).forEach(function(id){
+    var s0 = state.students[id];
+    if(s0.passwordHash===undefined){ s0.passwordHash = null; changed = true; }
+    if(s0.passwordSalt===undefined){ s0.passwordSalt = null; changed = true; }
+    if(!s0.draft){ s0.draft = {}; changed = true; }
+  });
+  if(state.deadlines && (state.deadlines.stage2!==undefined || state.deadlines.stage3!==undefined)){
+    var mergedDeadline = state.deadlines.stage2 || state.deadlines.stage3 || null;
+    state.deadlines = { stage1: state.deadlines.stage1||null, research: mergedDeadline, final: state.deadlines.final||null };
+    changed = true;
+  }
+  if(!state.deadlines) { state.deadlines = {stage1:null, research:null, final:null}; changed = true; }
+  Object.keys(state.students||{}).forEach(function(id){
+    var s = state.students[id];
+    if(s.stageStatus && (s.stageStatus.stage2!==undefined || s.stageStatus.stage3!==undefined)){
+      var rank2 = stageRank(s.stageStatus.stage2||'locked'), rank3 = stageRank(s.stageStatus.stage3||'locked');
+      var best = Math.max(rank2, rank3);
+      var mergedStatus = ['locked','open','submitted','approved'][best] || 'locked';
+      if(mergedStatus==='approved') mergedStatus = 'submitted'; // research no longer has an 'approved' gate
+      s.stageStatus = { stage1: s.stageStatus.stage1||'open', research: mergedStatus, final: s.stageStatus.final||'locked' };
+      changed = true;
+    }
+    if(s.stageStatus && s.stageStatus.stage1==='approved'){
+      // under the new model, approving stage1 opens both research and final together
+      if(s.stageStatus.research==='locked'){ s.stageStatus.research='open'; changed = true; }
+      if(s.stageStatus.final==='locked'){ s.stageStatus.final='open'; changed = true; }
+    }
+    (s.timeline||[]).forEach(function(e){
+      if(e.stage==='stage2' || e.stage==='stage3'){ e.stage='research'; changed = true; }
+      if(e.tools===undefined){ e.tools = []; changed = true; }
+      if(e.threadRoot===undefined){ e.threadRoot = null; changed = true; }
+    });
+  });
+  return changed;
+}
+
+var STATE = null;
+var SAVE_TIMER = null;
+function saveState(immediate){
+  touchMeta();
+  if(immediate){ return dbSet('state', STATE); }
+  clearTimeout(SAVE_TIMER);
+  return new Promise(function(resolve){
+    SAVE_TIMER = setTimeout(function(){ dbSet('state', STATE).then(resolve); }, 150);
+  });
+}
+
+/* ============================== 뷰 상태 ============================== */
+var VIEW = { screen:'home', role:null, studentId:null, teacherAuthed:false, teacherName:null };
+var DRAFTS = {
+  stageForm:{}, // stage -> {mainText, items:[{title,description,files:[]}], tools:[{name,reference}]}
+  feedback:{},  // "stage|studentId" -> text
+  reply:{},     // entryId -> text
+  roster:'',    // bulk add textarea
+  newStudentId:'', newStudentName:'',
+  loginId:'', loginName:'',
+  deadlineInputs:{}, // stage -> datetime-local string
+  passcodeAttempt:'', teacherNameAttempt:'', teacherNameSetup:'',
+  summaryOverrides:{} // studentId -> text (session-only edit buffer before save)
+};
+function freshStageDraft(){ return { mainText:'', items:[{title:'',description:'',files:[],itemType:''}], tools:[{name:'',reference:''}] }; }
+/**
+ * Where a student's in-progress (not-yet-submitted) writing lives. Backed by
+ * STATE.students[id].draft so it survives page reloads, browser restarts and
+ * even months between sessions — this is what lets a student close the page
+ * mid-paragraph and pick up writing again later exactly where they left off.
+ * Falls back to the old ephemeral DRAFTS.stageForm bucket when no student is
+ * in session (shouldn't normally happen, since only the student dashboard
+ * renders stage forms).
+ */
+function stageDraftStore(){
+  if(VIEW.role==='student' && VIEW.studentId && STATE.students[VIEW.studentId]){
+    var s = STATE.students[VIEW.studentId];
+    if(!s.draft) s.draft = {};
+    return s.draft;
+  }
+  return DRAFTS.stageForm;
+}
+function getStageDraft(stage){
+  var store = stageDraftStore();
+  if(!store[stage]) store[stage] = freshStageDraft();
+  return store[stage];
+}
+function resetStageDraft(stage){ stageDraftStore()[stage] = freshStageDraft(); }
+function currentTeacherName(){ return VIEW.teacherName || '교사'; }
+
+/**
+ * Updates the small "자동 저장됨" note under a stage's textarea directly via
+ * the DOM (no render()), so the student sees their writing is being saved
+ * without losing cursor position mid-sentence.
+ */
+function markAutosaved(stage){
+  clearTimeout(markAutosaved._t && markAutosaved._t[stage]);
+  if(!markAutosaved._t) markAutosaved._t = {};
+  markAutosaved._t[stage] = setTimeout(function(){
+    var note = document.getElementById('save-note-'+stage);
+    if(note) note.textContent = '✅ 자동 저장됨 · 이 기기에 안전하게 보관되고 있어요.';
+  }, 200);
+}
+
+/* ============================== 렌더 루트 ============================== */
+function render(){
+  var app = document.getElementById('app');
+  app.innerHTML = renderScreen();
+  bindGlobalHandlers(app);
+}
+
+function renderScreen(){
+  switch(VIEW.screen){
+    case 'home': return screenHome();
+    case 'studentLogin': return screenStudentLogin();
+    case 'teacherAuth': return screenTeacherAuth();
+    case 'teacherSetup': return screenTeacherSetup();
+    case 'studentDashboard': return screenStudentDashboard();
+    case 'teacherDashboard': return screenTeacherDashboard();
+    case 'teacherStudentDetail': return screenTeacherStudentDetail();
+    case 'teacherSummary': return screenTeacherSummary();
+    default: return screenHome();
+  }
+}
+
+/* ============================== 공통 조각 ============================== */
+function schoolLineParts(){
+  var parts = [];
+  if(STATE.meta.schoolName) parts.push(STATE.meta.schoolName);
+  if(STATE.meta.region) parts.push(STATE.meta.region);
+  if(STATE.meta.className) parts.push(STATE.meta.className);
+  return parts;
+}
+
+function masthead(whoLabel, opts){
+  opts = opts || {};
+  var subParts = schoolLineParts();
+  var subLine = subParts.length ? subParts.join(' · ')+' · 탐구 일지' : '학교/학급 미설정 · 탐구 일지';
+  return '' +
+  '<div class="masthead">' +
+    '<div class="brand">' +
+      '<div class="subject">'+escapeHtml(STATE.meta.subjectName||'개별 탐구 활동')+'</div>' +
+      '<div class="sub">'+escapeHtml(subLine)+'</div>' +
+    '</div>' +
+    '<div class="masthead-actions no-print">' +
+      (whoLabel ? '<span class="who"><span class="badge2">'+escapeHtml(whoLabel)+'</span></span>' : '') +
+      '<button data-action="open-help" class="small" title="도움말">도움말</button>' +
+      '<button data-action="export-state" class="small" title="백업 내보내기">내보내기</button>' +
+      '<button data-action="trigger-import" class="small" title="백업 불러오기">불러오기</button>' +
+      (opts.showHome!==false ? '<button data-action="go-home" class="small">처음으로</button>' : '') +
+    '</div>' +
+  '</div>';
+}
+
+function statusChip(status, extra){
+  var map = {
+    locked:{cls:'st-locked', label:'잠김'},
+    open:{cls:'st-open', label:'대기중'},
+    submitted:{cls:'st-submitted', label:'제출됨'},
+    approved:{cls:'st-approved', label:'승인됨'}
+  };
+  var m = map[status] || map.open;
+  var label = (extra&&extra.label) || m.label;
+  return '<span class="chip '+m.cls+'"><span class="dot"></span>'+escapeHtml(label)+'</span>';
+}
+
+function fileChip(f){
+  var isImg = f.mime && f.mime.indexOf('image/')===0;
+  return '<button type="button" class="file-chip" data-action="download-file" data-filechip-src="'+f.dataUrl+'" data-filechip-name="'+escapeHtml(f.name)+'" title="'+escapeHtml(f.name)+' 저장">' +
+    (isImg ? '<img src="'+f.dataUrl+'" alt="">' : '<span class="ic">📎</span>') +
+    '<span>'+escapeHtml(f.name)+'</span>' +
+  '</button>';
+}
+
+function entryInnerHtml(entry){
+  var typeLabel = {submission:'제출', feedback:'피드백', approval:'승인', reopen:'재검토 요청'}[entry.type] || entry.type;
+  var authorLabel = entry.author==='teacher' ? (entry.authorName||'교사') : '학생';
+  var itemsHtml = '';
+  if(entry.items && entry.items.length){
+    itemsHtml = entry.items.map(function(it, idx){
+      var files = (it.files||[]).map(fileChip).join('');
+      if(!it.title && !it.description && !(it.files||[]).length && !it.itemType) return '';
+      var typeBadge = (it.itemType && GRAPHIC_ITEM_TYPES.indexOf(it.itemType)!==-1) ?
+        '<span class="item-type-badge">'+(it.itemType==='통계지도'?'📍':'📋')+' '+escapeHtml(it.itemType)+'</span>' : '';
+      return '<div class="item-card">' +
+        '<div class="item-title">조사 항목 '+(idx+1)+(it.title? ' · '+escapeHtml(it.title):'')+typeBadge+'</div>' +
+        (it.description? '<div class="item-desc">'+escapeHtml(it.description)+'</div>' : '') +
+        (files? '<div class="file-list">'+files+'</div>' : '') +
+      '</div>';
+    }).join('');
+  }
+  var toolsHtml = '';
+  if(entry.tools && entry.tools.length){
+    toolsHtml = entry.tools.map(function(t, idx){
+      if(!t.name && !t.reference) return '';
+      return '<div class="item-card tool-card">' +
+        '<div class="item-title">🔧 활용 도구 '+(idx+1)+(t.name? ' · '+escapeHtml(t.name):'')+'</div>' +
+        (t.reference? '<div class="item-desc">'+escapeHtml(t.reference)+'</div>' : '') +
+      '</div>';
+    }).join('');
+  }
+  return '<div class="entry-meta"><span class="entry-author">'+authorLabel+(entry.authorName && entry.author!=='teacher'? ' · '+escapeHtml(entry.authorName):'')+'</span>' +
+      '<span>· '+typeLabel+'</span>' +
+      '<span class="mono">· '+fmtDateTime(entry.ts)+'</span>' +
+      (entry.late? '<span class="chip st-late" style="margin-left:4px;"><span class="dot"></span>기한 초과</span>' : '') +
+    '</div>' +
+    (entry.mainText? '<div class="entry-text">'+escapeHtml(entry.mainText)+'</div>' : '') +
+    itemsHtml + toolsHtml;
+}
+
+function timelineEntryHtml(entry){
+  return '<div class="entry type-'+entry.type+'">' + entryInnerHtml(entry) + '</div>';
+}
+
+function replyEntryHtml(entry){
+  var authorLabel = entry.author==='teacher' ? (entry.authorName||'교사') : (entry.authorName||'학생');
+  return '<div class="reply-entry">' +
+    '<div class="reply-meta"><span class="reply-author">'+escapeHtml(authorLabel)+'</span><span class="mono faint">'+fmtDateTime(entry.ts)+'</span></div>' +
+    '<div class="reply-text">'+escapeHtml(entry.mainText)+'</div>' +
+  '</div>';
+}
+
+/**
+ * Renders one stage's entries as a chronological list, nesting any
+ * 'comment' replies underneath the 'feedback' entry they respond to and
+ * offering an inline reply box there. Used identically in the teacher and
+ * student views so every teacher (up to the recommended 3) and the student
+ * see the exact same feedback/comment thread.
+ */
+function renderStageEntries(entries, stage){
+  var topLevel = entries.filter(function(e){ return !e.threadRoot; });
+  return topLevel.map(function(entry){
+    var inner = entryInnerHtml(entry);
+    if(entry.type==='feedback'){
+      var replies = entries.filter(function(e){ return e.threadRoot===entry.id; })
+        .sort(function(a,b){ return new Date(a.ts)-new Date(b.ts); });
+      var draftVal = DRAFTS.reply[entry.id] || '';
+      inner += '<div class="reply-thread">' +
+        replies.map(replyEntryHtml).join('') +
+        '<div class="reply-box">' +
+          '<textarea data-reply-input="'+entry.id+'" placeholder="이 피드백에 대한 생각이나 답변을 남겨보세요">'+escapeHtml(draftVal)+'</textarea>' +
+          '<div><button type="button" class="small" data-action="send-reply" data-root="'+entry.id+'" data-stage="'+stage+'">답글 남기기</button></div>' +
+        '</div>' +
+      '</div>';
+    }
+    return '<div class="entry type-'+entry.type+'">' + inner + '</div>';
+  }).join('');
+}
+
+function helpModal(){
+  return '<div class="modal-backdrop no-print" data-action="close-help">' +
+    '<div class="modal" onclick="event.stopPropagation()">' +
+      '<h3>이 페이지 사용법</h3>' +
+      '<div class="helpbox">' +
+      '<p>이 페이지는 서버 없이 동작하는 <b>단일 HTML 파일</b>입니다. 같은 컴퓨터(예: 교실 공용 PC)에서 학생과 교사가 함께 사용하면 자동으로 기록이 쌓이지만, 각자 다른 기기(집 컴퓨터, 개인 노트북·태블릿 등)에서 접속하면 저장 공간이 서로 달라 데이터가 자동으로 공유되지 않습니다.</p>' +
+      '<p>여러 기기에서 사용할 때는 다음 순서를 따르세요.</p>' +
+      '<ol>' +
+        '<li>교사가 학급 설정(과목명·학생 명단·제출 기한)을 마친 뒤 <b>내보내기</b>로 백업 파일(.json)을 만들어 학생들과 공유합니다.</li>' +
+        '<li>학생은 그 파일을 <b>불러오기 → 전체 덮어쓰기</b>로 불러온 뒤, 자신의 탐구 내용을 기록합니다.</li>' +
+        '<li>학생은 작업 후 <b>내보내기</b>로 자신의 진행 파일을 저장해 교사에게 제출(메신저·학급 게시판 등)합니다.</li>' +
+        '<li>교사는 학생이 보낸 파일을 <b>불러오기 → 학생 기록만 병합</b>으로 불러와 확인하고 피드백을 남긴 뒤, 다시 내보내 학생에게 돌려줍니다.</li>' +
+      '</ol>' +
+      '<p>한 학생에게 최대 3명의 교사가 함께 피드백을 남길 수 있습니다. 교사로 입장할 때마다 이름을 입력하면 그 이름이 피드백에 함께 표시되어 누가 남긴 의견인지 구분할 수 있습니다. 학생도 교사의 피드백에 답글을 남길 수 있고, 이 모든 대화는 학생 본인과 참여한 모든 교사가 함께 볼 수 있습니다.</p>' +
+      '<p>학번과 이름만으로는 다른 사람의 자료를 볼 수 없도록, 학생은 처음 입장할 때 스스로 비밀번호를 만들고 이후에는 같은 비밀번호를 입력해야 입장할 수 있습니다(숫자 또는 영문 6~10자). 비밀번호를 잊은 학생은 담당 교사에게 요청하면, 교사가 학생 상세 화면에서 <b>비밀번호 초기화</b> 버튼으로 초기화해 줄 수 있고, 초기화 후에는 다음 입장 시 다시 새 비밀번호를 만들게 됩니다.</p>' +
+      '<p>탐구는 여러 달에 걸쳐 진행되는 활동이에요. 학생이 작성 중인 내용은 제출하지 않아도 입력하는 즉시 자동으로 저장되므로, 오늘 쓰던 걸 다음 주, 다음 달에 다시 열어도 그대로 이어서 쓸 수 있습니다. 최종 결과물에는 도해력(그래프·지도를 읽고 만드는 능력) 평가를 위해 통계지도 또는 표 중 하나를 꼭 포함하도록 안내되어 있어요.</p>' +
+      '<p>같은 브라우저를 계속 사용한다면(예: 교실 공용 기기, 또는 학생 개인 기기를 학기 내내 그대로 사용) 이 과정 없이 자동으로 기록이 누적됩니다. 모든 자료는 이 페이지를 여는 기기에만 저장되므로, 주기적으로 <b>내보내기</b>로 백업해 두는 것을 권장합니다.</p>' +
+      '</div>' +
+      '<div style="text-align:right;margin-top:14px;"><button data-action="close-help" class="primary small">닫기</button></div>' +
+    '</div>' +
+  '</div>';
+}
+
+/* ============================== 홈 화면 ============================== */
+function screenHome(){
+  return '' +
+  '<div class="home-hero">' +
+    '<div class="eyebrow">✏️ 탐구 일지</div>' +
+    '<h1>'+escapeHtml(STATE.meta.subjectName||'개별 탐구 활동')+'</h1>' +
+    '<p class="muted">'+(schoolLineParts().length? escapeHtml(schoolLineParts().join(' · '))+' · ':'')+'주제 선정부터 최종 결과물까지, 선생님 피드백과 함께 차곡차곡 쌓여가는 나만의 탐구 기록이에요.</p>' +
+  '</div>' +
+  '<div class="role-grid">' +
+    '<div class="role-card" data-action="enter-student">' +
+      '<div class="icon">🎒</div>' +
+      '<div class="tag">Student</div><h3>학생으로 시작</h3>' +
+      '<p>학번과 이름, 비밀번호로 들어가 나의 탐구 활동을 기록해요.</p>' +
+    '</div>' +
+    '<div class="role-card" data-action="enter-teacher">' +
+      '<div class="icon">👩‍🏫</div>' +
+      '<div class="tag">Teacher</div><h3>선생님으로 시작</h3>' +
+      '<p>학급을 관리하고 학생 활동에 피드백을 남겨요.</p>' +
+    '</div>' +
+  '</div>' +
+  '<div class="card tight no-print">' +
+    '<div class="hgroup"><h4 style="margin:0;">💬 이 페이지에 대해</h4></div>' +
+    '<div class="helpbox">이 페이지는 별도 서버 없이 하나의 HTML 파일로 동작하며, 데스크탑·노트북·태블릿 어디서나 똑같이 사용할 수 있어요. 작성 중인 내용은 자동으로 저장되니 몇 달에 걸쳐 이어서 써도 걱정 없어요. 처음 사용한다면 상단 <button class="link-btn" data-action="open-help">도움말</button>을 먼저 읽어보세요.</div>' +
+  '</div>';
+}
+
+/* ============================== 학생 로그인 ============================== */
+function screenStudentLogin(){
+  return masthead(null) +
+  '<div class="backlink no-print"><button class="ghost small" data-action="go-home">← 처음으로</button></div>' +
+  '<div class="card" style="max-width:420px;margin:0 auto;">' +
+    '<h3>🎒 학생 입장</h3>' +
+    '<p class="faint">학번, 이름, 비밀번호를 입력해 주세요. 처음 입장하는 학번이라면 지금 입력하는 비밀번호로 나만의 계정이 만들어지고, 다음부터는 같은 비밀번호로만 들어올 수 있어요. 비밀번호를 잊어버렸다면 선생님께 초기화를 요청하면 돼요.</p>' +
+    '<form data-form="student-login">' +
+      '<div class="field"><label>학번</label><input name="studentId" placeholder="예: 10305" value="'+escapeHtml(DRAFTS.loginId)+'" required></div>' +
+      '<div class="field"><label>이름</label><input name="name" placeholder="예: 홍길동" value="'+escapeHtml(DRAFTS.loginName)+'" required></div>' +
+      '<div class="field">' +
+        '<label>비밀번호</label>' +
+        '<p class="hint-small" id="pwHint">🔒 숫자 또는 영문으로 6~10자 이내로 만들어 주세요 (예: study25)</p>' +
+        '<input type="password" name="password" placeholder="처음이라면 새 비밀번호를 만들어 주세요" maxlength="10" required autocomplete="off">' +
+      '</div>' +
+      '<button type="submit" class="primary" style="width:100%;">입장하기</button>' +
+    '</form>' +
+  '</div>';
+}
+
+/* ============================== 교사 인증 ============================== */
+function teacherNameDatalist(){
+  return (STATE.meta.teachers||[]).map(function(n){ return '<option value="'+escapeHtml(n)+'">'; }).join('');
+}
+
+function screenTeacherAuth(){
+  if(!STATE.meta.teacherPasscode){ VIEW.screen='teacherSetup'; return screenTeacherSetup(); }
+  return masthead(null) +
+  '<div class="backlink no-print"><button class="ghost small" data-action="go-home">← 처음으로</button></div>' +
+  '<div class="card" style="max-width:400px;margin:0 auto;">' +
+    '<h3>교사 인증</h3>' +
+    '<p class="faint">학급 설정 시 지정한 비밀번호와 본인 이름을 입력하세요. 최대 '+MAX_TEACHERS_HINT+'명의 교사가 함께 피드백을 남길 수 있습니다.</p>' +
+    '<form data-form="teacher-auth">' +
+      '<div class="field"><label>비밀번호</label><input type="password" name="passcode" value="'+escapeHtml(DRAFTS.passcodeAttempt)+'" required></div>' +
+      '<div class="field"><label>담당 교사 이름</label>' +
+        '<input name="teacherName" list="teacherNameList" placeholder="예: 김민지" value="'+escapeHtml(DRAFTS.teacherNameAttempt)+'" required>' +
+        '<datalist id="teacherNameList">'+teacherNameDatalist()+'</datalist>' +
+        (STATE.meta.teachers && STATE.meta.teachers.length? '<p class="faint" style="margin-top:6px;">등록된 교사: '+escapeHtml(STATE.meta.teachers.join(', '))+'</p>' : '') +
+      '</div>' +
+      '<button type="submit" class="primary" style="width:100%;">확인</button>' +
+    '</form>' +
+    '<p class="faint" style="margin-top:10px;">비밀번호를 잊었다면 <button class="link-btn" data-action="reset-passcode-hint">여기</button>를 확인하세요.</p>' +
+  '</div>';
+}
+
+function regionOptions(){
+  var opts = '<option value=""'+(!STATE.meta.region?' selected':'')+'>선택 안 함</option>';
+  opts += REGION_LIST.map(function(r){
+    return '<option value="'+escapeHtml(r)+'"'+(STATE.meta.region===r?' selected':'')+'>'+escapeHtml(r)+'</option>';
+  }).join('');
+  return opts;
+}
+
+function screenTeacherSetup(){
+  var isFirstTime = !STATE.meta.teacherPasscode;
+  return masthead(null) +
+  '<div class="backlink no-print"><button class="ghost small" data-action="go-home">← 처음으로</button></div>' +
+  '<div class="card" style="max-width:520px;margin:0 auto;">' +
+    '<h3>'+(isFirstTime? '학급 최초 설정' : '학급 정보 수정')+'</h3>' +
+    (isFirstTime? '<p class="faint">여러 학교에서 함께 쓸 수 있도록 지역과 학교명을 먼저 설정하고, 과목명과 비밀번호, 담당 교사 이름을 설정하면 교사 관리 화면을 사용할 수 있습니다.</p>' : '') +
+    '<form data-form="teacher-setup">' +
+      '<div class="row">' +
+        '<div class="field"><label>지역(시·도)</label><select name="region">'+regionOptions()+'</select></div>' +
+        '<div class="field"><label>학교명</label><input name="schoolName" value="'+escapeHtml(STATE.meta.schoolName)+'" placeholder="예: 통사고등학교"></div>' +
+      '</div>' +
+      '<div class="field"><label>과목명</label><input name="subjectName" value="'+escapeHtml(STATE.meta.subjectName)+'" placeholder="예: 한국지리 개별 탐구 활동" required></div>' +
+      '<div class="field"><label>학급명</label><input name="className" value="'+escapeHtml(STATE.meta.className)+'" placeholder="예: 1학년 3반"></div>' +
+      (isFirstTime? '<div class="field"><label>담당 교사 이름</label><input name="teacherName" placeholder="예: 김민지" required></div>' : '') +
+      '<div class="field"><label>'+(isFirstTime?'비밀번호 설정':'비밀번호 변경 (선택)')+'</label><input type="password" name="passcode" placeholder="'+(isFirstTime?'교사 확인용 비밀번호':'변경하지 않으려면 비워두세요')+'" '+(isFirstTime?'required':'')+'></div>' +
+      '<button type="submit" class="primary" style="width:100%;">'+(isFirstTime?'설정 완료':'저장')+'</button>' +
+    '</form>' +
+  '</div>';
+}
+
+/* ============================== 교사 대시보드 ============================== */
+function screenTeacherDashboard(){
+  var ids = Object.keys(STATE.students).sort();
+  var rows = ids.map(function(id){
+    var s = STATE.students[id];
+    var cells = STAGE_ORDER.map(function(st){
+      var status = s.stageStatus[st];
+      if(st==='final' && status==='submitted' && !s.presentationEligible){
+        return '<td>'+statusChip('submitted',{label:'제출(기한초과)'})+'</td>';
+      }
+      return '<td>'+statusChip(status)+'</td>';
+    }).join('');
+    return '<tr class="clickable" data-action="open-student" data-id="'+escapeHtml(id)+'">' +
+      '<td class="mono">'+escapeHtml(id)+'</td><td>'+escapeHtml(s.name)+'</td>'+cells+
+      '<td>'+(s.presentationEligible? '<span class="chip st-approved"><span class="dot"></span>발표 가능</span>' : '<span class="chip st-open"><span class="dot"></span>-</span>')+'</td>' +
+    '</tr>';
+  }).join('');
+
+  var deadlineFields = STAGE_ORDER.map(function(st){
+    var val = DRAFTS.deadlineInputs[st] !== undefined ? DRAFTS.deadlineInputs[st] : toDatetimeLocalValue(STATE.deadlines[st]);
+    return '<div class="field"><label>'+(STAGE_INFO[st].num?STAGE_INFO[st].num+'차 · ':'')+STAGE_INFO[st].label+' 기한</label>' +
+      '<input type="datetime-local" data-deadline-stage="'+st+'" value="'+val+'"></div>';
+  }).join('');
+
+  return masthead(currentTeacherName()) +
+  '<div class="card">' +
+    '<div class="hgroup"><h3 style="margin:0;">단계별 제출 기한</h3><button class="small" data-action="edit-subject">학급 정보 수정</button></div>' +
+    '<form data-form="deadlines">' +
+      '<div class="row">'+deadlineFields+'</div>' +
+      '<button type="submit" class="primary">기한 저장</button>' +
+    '</form>' +
+  '</div>' +
+  '<div class="card">' +
+    '<div class="hgroup"><h3 style="margin:0;">학생 명단 ('+ids.length+'명)</h3>' +
+      '<button class="small" data-action="show-summary">발표·세특 요약 보기<span class="teacher-only-tag" style="margin-left:6px;">교사 전용</span></button></div>' +
+    (ids.length===0 ? '<p class="faint">아직 등록된 학생이 없습니다. 아래에서 추가하세요.</p>' : '') +
+    (ids.length? '<div class="table-wrap"><table><thead><tr><th>학번</th><th>이름</th><th>1차</th><th>탐구진행</th><th>최종</th><th>발표</th></tr></thead><tbody>'+rows+'</tbody></table></div>' : '') +
+  '</div>' +
+  '<div class="card">' +
+    '<h4>학생 추가</h4>' +
+    '<div class="row">' +
+      '<form data-form="add-student" class="row" style="flex:3;">' +
+        '<div class="field" style="min-width:120px;"><label>학번</label><input name="studentId" placeholder="10305" value="'+escapeHtml(DRAFTS.newStudentId)+'"></div>' +
+        '<div class="field" style="min-width:120px;"><label>이름</label><input name="name" placeholder="홍길동" value="'+escapeHtml(DRAFTS.newStudentName)+'"></div>' +
+        '<div class="field" style="flex:0;align-self:end;"><button type="submit" class="primary">추가</button></div>' +
+      '</form>' +
+    '</div>' +
+    '<div class="field"><label>일괄 추가 (한 줄에 "학번,이름")</label>' +
+      '<textarea data-bind="roster" placeholder="10301,김민준&#10;10302,이서연">'+escapeHtml(DRAFTS.roster)+'</textarea></div>' +
+    '<button class="small" data-action="bulk-add-students">일괄 추가</button>' +
+  '</div>';
+}
+
+/* ============================== 교사 - 학생 상세 ============================== */
+function stageActionsForTeacher(student, stage){
+  // Only stage1(주제 선정) gates the next steps, so only it has an approve/reopen action.
+  if(stage !== 'stage1') return '';
+  var status = student.stageStatus[stage];
+  var actions = '';
+  if(status==='submitted'){
+    actions += '<button class="small primary" data-action="approve-stage" data-stage="'+stage+'">이 단계 승인</button> ';
+  } else if(status==='approved'){
+    actions += '<button class="small ghost" data-action="reopen-stage" data-stage="'+stage+'">재검토 요청(다시 열기)</button> ';
+  }
+  return actions;
+}
+
+function feedbackCountBadge(entries){
+  var count = entries.filter(function(e){ return e.type==='feedback' && !e.threadRoot; }).length;
+  return '<span class="feedback-count-badge mono">피드백 '+count+'회 · 선택, 권장 최대 '+RECOMMENDED_MAX_RESEARCH_FEEDBACK+'회</span>';
+}
+
+function screenTeacherStudentDetail(){
+  var student = STATE.students[VIEW.studentId];
+  if(!student){ VIEW.screen='teacherDashboard'; return screenTeacherDashboard(); }
+  var stagesHtml = STAGE_ORDER.map(function(stage){
+    var info = STAGE_INFO[stage];
+    var status = student.stageStatus[stage];
+    var entries = student.timeline.filter(function(e){ return e.stage===stage; });
+    var deadline = STATE.deadlines[stage];
+    var fbDraft = DRAFTS.feedback[stage+'|'+student.studentId] || '';
+    return '<div class="stage-block">' +
+      '<div class="stage-head">' +
+        '<div class="left">' +
+          (info.num? '<span class="stage-num">'+info.num+'</span>' : '<span class="stage-num">★</span>') +
+          '<div><div class="stage-title">'+escapeHtml(info.label)+'</div>' +
+          '<div class="stage-deadline">기한: '+fmtDateTime(deadline)+(isPast(deadline)&&status!=='approved'?' · <span style="color:var(--danger)">경과</span>':'')+'</div></div>' +
+        '</div>' +
+        '<div class="right">' + (stage==='research'? feedbackCountBadge(entries)+' ' : '') + statusChip(status) + '</div>' +
+      '</div>' +
+      '<div class="stage-body '+(entries.length?'':'empty')+'">' +
+        (entries.length? renderStageEntries(entries, stage) : '아직 기록이 없습니다.') +
+        '<div style="margin-top:14px;border-top:1px solid var(--border);padding-top:12px;">' +
+          '<label>이 단계에 피드백 남기기</label>' +
+          '<textarea data-feedback-input="'+stage+'|'+student.studentId+'" placeholder="구체화가 필요한 부분, 칭찬할 점 등을 자유롭게 남기세요.">'+escapeHtml(fbDraft)+'</textarea>' +
+          '<div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap;">' +
+            '<button class="small primary" data-action="send-feedback" data-stage="'+stage+'">피드백 남기기</button>' +
+            stageActionsForTeacher(student, stage) +
+          '</div>' +
+        '</div>' +
+      '</div>' +
+    '</div>';
+  }).join('');
+
+  return masthead(currentTeacherName()) +
+  '<div class="backlink no-print"><button class="ghost small" data-action="back-to-dashboard">← 학생 명단</button></div>' +
+  '<div class="card tight">' +
+    '<div class="hgroup"><h3 style="margin:0;">'+escapeHtml(student.name)+' <span class="mono faint">('+escapeHtml(student.studentId)+')</span></h3>' +
+    (student.presentationEligible? '<span class="chip st-approved"><span class="dot"></span>발표 가능</span>' : '<span class="chip st-open"><span class="dot"></span>발표 대상 아님</span>') +
+    '</div>' +
+    '<div style="margin-top:8px;">' +
+      (student.passwordHash?
+        '<button class="ghost small" data-action="reset-student-password" data-id="'+escapeHtml(student.studentId)+'">🔑 비밀번호 초기화</button> <span class="faint" style="font-size:12.5px;">초기화하면 학생이 다음 입장 시 새 비밀번호를 설정합니다.</span>'
+        : '<span class="faint" style="font-size:12.5px;">아직 비밀번호를 설정하지 않은 학생입니다(첫 입장 시 설정됨).</span>') +
+    '</div>' +
+  '</div>' +
+  stagesHtml;
+}
+
+/* ============================== 교사 - 발표/세특 요약 (교사만 접근 가능) ============================== */
+function generateSummaryText(student){
+  function lastMain(stage){
+    var subs = student.timeline.filter(function(e){ return e.stage===stage && e.type==='submission'; });
+    return subs.length? subs[subs.length-1].mainText : '';
+  }
+  function feedbackCount(stage){
+    return student.timeline.filter(function(e){ return e.stage===stage && e.type==='feedback' && !e.threadRoot; }).length;
+  }
+  function toolsUsed(){
+    var names = [];
+    student.timeline.forEach(function(e){
+      (e.tools||[]).forEach(function(t){
+        if(t.name && names.indexOf(t.name)===-1) names.push(t.name);
+      });
+    });
+    return names;
+  }
+  var topic = lastMain('stage1');
+  var research = lastMain('research');
+  var final = lastMain('final');
+  var tools = toolsUsed();
+  var parts = [];
+  if(topic) parts.push('‘'+topic+'’을(를) 탐구 주제로 선정하고'+(feedbackCount('stage1')? ' 교사 피드백을 반영하여 주제를 구체화함.' : '함.'));
+  if(research) parts.push('서론-본론-결론의 방향을 설정하고 자료를 조사·분석하며 탐구 내용을 구체화함('+research.slice(0,70)+(research.length>70?'…':'')+').');
+  if(tools.length) parts.push('탐구 과정에서 '+tools.join(', ')+' 등을 활용함.');
+  if(final) parts.push('최종적으로 '+(student.presentationEligible? '기한 내 ':'')+'탐구 결과물을 완성함('+final.slice(0,80)+(final.length>80?'…':'')+').');
+  parts.push(student.presentationEligible? '2학기 기말고사 이후 학급 내 탐구 발표를 진행함.' : '최종 결과물 제출이 확인되지 않아 발표 대상에서 제외됨.');
+  if(!topic && !research && !final) return escapeHtml(student.name)+' 학생은 아직 탐구 활동을 시작하지 않음.';
+  return escapeHtml(student.name)+' 학생은 '+parts.join(' ');
+}
+
+function screenTeacherSummary(){
+  var ids = Object.keys(STATE.students).sort();
+  var blocks = ids.map(function(id){
+    var s = STATE.students[id];
+    var text = DRAFTS.summaryOverrides[id];
+    if(text===undefined) text = generateSummaryText(s);
+    return '<div class="summary-block">' +
+      '<div class="hgroup"><span class="sname">'+escapeHtml(id)+' '+escapeHtml(s.name)+'</span>' +
+        (s.presentationEligible? statusChip('approved',{label:'발표 가능'}) : statusChip('open',{label:'발표 대상 아님'})) +
+      '</div>' +
+      '<textarea data-summary-input="'+id+'" style="min-height:70px;">'+escapeHtml(text)+'</textarea>' +
+      '<div style="margin-top:6px;display:flex;gap:8px;">' +
+        '<button class="small" data-action="regen-summary" data-id="'+id+'">다시 생성</button>' +
+        '<button class="small" data-action="copy-summary" data-id="'+id+'">복사</button>' +
+      '</div>' +
+    '</div>';
+  }).join('');
+  return masthead(currentTeacherName()) +
+  '<div class="backlink no-print"><button class="ghost small" data-action="back-to-dashboard">← 학생 명단</button></div>' +
+  '<div class="card">' +
+    '<div class="hgroup"><h3 style="margin:0;">발표자 명단 및 세특 요약 (학번순) <span class="teacher-only-tag">교사만 볼 수 있음</span></h3>' +
+      '<div style="display:flex;gap:8px;"><button class="small" data-action="export-summary">전체 텍스트 내보내기</button><button class="small" data-action="print-summary">인쇄</button></div></div>' +
+    '<p class="faint">아래 요약은 학생의 기록을 바탕으로 자동 생성된 초안입니다. 이 화면은 교사 인증을 거쳐야만 볼 수 있으며 학생에게는 노출되지 않습니다. 생활기록부 등록 전 내용을 검토·수정하세요.</p>' +
+  '</div>' +
+  (ids.length? blocks : '<div class="card"><p class="faint">등록된 학생이 없습니다.</p></div>');
+}
+
+/* ============================== 학생 대시보드 ============================== */
+function stepperState(stage, student){
+  var status = student.stageStatus[stage];
+  if(stage==='stage1') return status==='approved' ? 'done' : (status==='locked' ? 'todo' : 'current');
+  if(stage==='final'){
+    var hasFinalSubmission = student.timeline.some(function(e){ return e.stage==='final' && e.type==='submission'; });
+    return hasFinalSubmission ? 'done' : (status==='locked' ? 'todo' : 'current');
+  }
+  return status==='locked' ? 'todo' : 'current';
+}
+
+function renderStageStepper(student){
+  var steps = STAGE_ORDER.map(function(stage){
+    var info = STAGE_INFO[stage];
+    var state = stepperState(stage, student);
+    return '<div class="stepper-step '+state+'">' +
+      '<div class="stepper-circle">'+(state==='done'? '✓' : info.icon)+'</div>' +
+      '<div class="stepper-label">'+escapeHtml(info.shortLabel)+'</div>' +
+    '</div>';
+  }).join('');
+  return '<div class="stepper no-print">'+steps+'</div>';
+}
+
+/**
+ * 도해력(그래픽 문해력) 평가를 위해, 최종 결과물에는 통계지도 또는 표 중 하나가
+ * 반드시 포함되어야 합니다. 이미 제출된 최종 기록이나, 현재 작성 중인 조사
+ * 항목 중 하나라도 "통계지도"/"표" 유형으로 표시되어 있으면 충족된 것으로 봅니다.
+ */
+function hasRequiredGraphicItem(student, draftItems){
+  var inDraft = (draftItems||[]).some(function(it){ return GRAPHIC_ITEM_TYPES.indexOf(it.itemType)!==-1; });
+  if(inDraft) return true;
+  return student.timeline.some(function(e){
+    return e.stage==='final' && e.type==='submission' &&
+      (e.items||[]).some(function(it){ return GRAPHIC_ITEM_TYPES.indexOf(it.itemType)!==-1; });
+  });
+}
+
+function screenStudentDashboard(){
+  var student = STATE.students[VIEW.studentId];
+  if(!student){ VIEW.screen='home'; return screenHome(); }
+  var stagesHtml = STAGE_ORDER.map(function(stage){
+    var info = STAGE_INFO[stage];
+    var status = student.stageStatus[stage];
+    var entries = student.timeline.filter(function(e){ return e.stage===stage; });
+    var deadline = STATE.deadlines[stage];
+    var editable = (status==='open' || status==='submitted');
+    var body = '';
+    if(entries.length) body += renderStageEntries(entries, stage);
+    else body += '<div class="faint" style="font-style:italic;margin-bottom:10px;">'+escapeHtml(info.hint)+'</div>';
+
+    if(status==='locked'){
+      body += '<div class="notice info">🔒 탐구 주제(1차)가 승인되면 이 단계를 진행할 수 있어요.</div>';
+    } else if(editable){
+      body += renderStageForm(stage, deadline, student);
+    } else if(status==='approved'){
+      body += '<div class="notice ok">👍 이 단계는 승인되었어요. 다음 단계를 진행해 보세요.</div>';
+    }
+    return '<div class="stage-block">' +
+      '<div class="stage-head">' +
+        '<div class="left">' +
+          (info.num? '<span class="stage-num">'+info.num+'</span>' : '<span class="stage-num">★</span>') +
+          '<div><div class="stage-title">'+escapeHtml(info.label)+'</div>' +
+            '<div class="stage-deadline">기한: '+fmtDateTime(deadline)+(isPast(deadline)&&status!=='approved'?' · <span style="color:var(--danger)">경과</span>':'')+'</div></div>' +
+        '</div>' +
+        '<div class="right">' + (stage==='research'? feedbackCountBadge(entries)+' ' : '') + statusChip(status) + '</div>' +
+      '</div>' +
+      '<div class="stage-body">'+body+'</div>' +
+    '</div>';
+  }).join('');
+
+  return masthead(student.studentId+' '+student.name) +
+  '<div class="backlink no-print"><button class="ghost small" data-action="go-home">← 로그아웃</button></div>' +
+  renderStageStepper(student) +
+  (student.presentationEligible ? '<div class="notice ok">🎉 최종 결과물을 기한 내에 제출했습니다. 2학기 기말고사 이후 학급 발표 대상입니다.</div>' : '') +
+  stagesHtml;
+}
+
+function renderToolsSection(stage, draft){
+  var toolsList = draft.tools.map(function(tool, idx){
+    return '<div class="form-item tool-item">' +
+      '<div class="form-item-head"><span class="num">활용 도구 '+(idx+1)+'</span>' +
+        (draft.tools.length>1 ? '<button type="button" class="small ghost" data-action="remove-tool" data-stage="'+stage+'" data-tool="'+idx+'">삭제</button>' : '') +
+      '</div>' +
+      '<div class="field"><label>도구 종류 / 이름</label><input data-tool-field="name" data-stage="'+stage+'" data-tool="'+idx+'" value="'+escapeHtml(tool.name)+'" placeholder="예: 생성형 AI(ChatGPT), 도서 - 『한국지리』, 교과서 3단원 등"></div>' +
+      '<div class="field"><label>참고한 내용</label><textarea data-tool-field="reference" data-stage="'+stage+'" data-tool="'+idx+'" placeholder="이 도구에서 무엇을 참고했는지 적어주세요.">'+escapeHtml(tool.reference)+'</textarea></div>' +
+    '</div>';
+  }).join('');
+  return '<label style="margin-top:14px;">활용한 도구 (선택 사항)</label>' +
+    '<p class="faint" style="margin:-2px 0 8px;">생성형 AI, 도서, 교과서 등 조사에 활용한 도구가 있다면 도구별로 기록하고, 바로 아래 칸에 어떤 내용을 참고했는지 적어주세요.</p>' +
+    toolsList +
+    '<button type="button" class="small ghost" data-action="add-tool" data-stage="'+stage+'" style="margin-bottom:14px;">+ 활용 도구 추가</button>';
+}
+
+function itemTypeOptions(selected){
+  var options = [
+    {v:'', label:'일반 자료'},
+    {v:'통계지도', label:'📍 통계지도'},
+    {v:'표', label:'📋 표(통계표)'}
+  ];
+  return options.map(function(o){
+    return '<option value="'+o.v+'"'+(selected===o.v?' selected':'')+'>'+o.label+'</option>';
+  }).join('');
+}
+
+function renderStageForm(stage, deadline, student){
+  var draft = getStageDraft(stage);
+  var mainLabel = {stage1:'탐구 주제 및 선정 이유', research:'탐구 방향(서론·본론·결론)·목차 및 진행 내용', final:'최종 결과물 요약'}[stage];
+  var itemsHtml = draft.items.map(function(item, idx){
+    var files = item.files.map(function(f,fi){
+      return '<span class="draft-file-chip">'+escapeHtml(f.name)+' <button type="button" class="ghost" data-action="remove-draft-file" data-stage="'+stage+'" data-item="'+idx+'" data-file="'+fi+'">✕</button></span>';
+    }).join('');
+    return '<div class="form-item">' +
+      '<div class="form-item-head"><span class="num">조사 항목 '+(idx+1)+'</span>' +
+        (draft.items.length>1 ? '<button type="button" class="small ghost" data-action="remove-item" data-stage="'+stage+'" data-item="'+idx+'">항목 삭제</button>' : '') +
+      '</div>' +
+      '<div class="field"><label>제목</label><input data-item-field="title" data-stage="'+stage+'" data-item="'+idx+'" value="'+escapeHtml(item.title)+'" placeholder="예: 지형도 분석"></div>' +
+      (stage==='final' ? '<div class="field"><label>자료 유형</label><select data-item-field="itemType" data-stage="'+stage+'" data-item="'+idx+'">'+itemTypeOptions(item.itemType)+'</select></div>' : '') +
+      '<div class="field"><label>자료 업로드</label><input type="file" multiple data-item-file="'+stage+'|'+idx+'"></div>' +
+      (files? '<div class="draft-file-list">'+files+'</div>' : '') +
+      '<div class="field" style="margin-top:8px;"><label>설명</label><textarea data-item-field="description" data-stage="'+stage+'" data-item="'+idx+'" placeholder="찾은 자료에 대한 설명을 적어주세요.">'+escapeHtml(item.description)+'</textarea></div>' +
+    '</div>';
+  }).join('');
+
+  var graphicOk = stage==='final' ? hasRequiredGraphicItem(student, draft.items) : true;
+
+  return '<form data-form="stage-submit" data-stage="'+stage+'" style="margin-top:14px;border-top:1px solid var(--border);padding-top:14px;">' +
+    (isPast(deadline)? '<div class="notice warn">⏰ 제출 기한이 지났어요. 제출은 가능하지만 "기한 초과"로 표시됩니다'+(stage==='final'?' (발표 대상에서 제외될 수 있어요).':'.') +'</div>' : '') +
+    (stage==='final' ? '<div class="notice info">💡 <b>통계지도나 표는 이렇게 만들어보세요.</b> 클로드, 챗GPT, 제미나이 같은 생성형 AI에게 정리한 자료를 주고 "이 내용을 표로 정리해줘" 또는 "이 데이터로 지역별 통계지도를 만들어줘"라고 요청해 보세요. 만들어진 화면을 캡처하거나 이미지로 저장한 뒤, 아래 조사 항목의 "자료 업로드"에 첨부하고 자료 유형을 선택하면 돼요.</div>' : '') +
+    (stage==='final' ? '<div class="notice '+(graphicOk?'ok':'warn')+'" style="margin-bottom:14px;">'+(graphicOk?'✅ 통계지도 또는 표가 포함되어 있어요. 아주 잘하고 있어요!':'⚠️ 최종 결과물에는 통계지도나 표 중 하나를 꼭 포함해야 해요. 아래 조사 항목에서 자료 유형을 "통계지도" 또는 "표"로 선택해 주세요.')+'</div>' : '') +
+    '<div class="field"><label>'+mainLabel+'</label><textarea data-main-input="'+stage+'" placeholder="내용을 입력하세요">'+escapeHtml(draft.mainText)+'</textarea></div>' +
+    '<p class="save-hint" id="save-note-'+stage+'">✍️ 작성한 내용은 자동으로 저장돼요. 다음에 다시 들어와도 이어서 쓸 수 있어요.</p>' +
+    '<label>조사 항목</label>' +
+    itemsHtml +
+    '<button type="button" class="small ghost" data-action="add-item" data-stage="'+stage+'" style="margin-bottom:12px;">+ 조사 항목 추가</button>' +
+    (stage!=='stage1' ? renderToolsSection(stage, draft) : '') +
+    '<div><button type="submit" class="primary">'+(stage==='final'?'🎉 최종 결과물 제출':'제출(이어서 기록)')+'</button></div>' +
+  '</form>';
+}
+
+/* ============================== 이벤트 바인딩 ============================== */
+function bindGlobalHandlers(app){
+  app.onclick = function(e){
+    var t = e.target.closest('[data-action]');
+    if(!t) return;
+    var action = t.getAttribute('data-action');
+    handleAction(action, t, e);
+  };
+  app.oninput = function(e){
+    var el = e.target;
+    if(el.matches('select[data-item-field="itemType"]')){
+      // a dropdown choice (not free typing), so a full re-render is safe here —
+      // it lets the "통계지도/표 포함 여부" notice update immediately.
+      var stageSel = el.getAttribute('data-stage');
+      var idxSel = parseInt(el.getAttribute('data-item'),10);
+      getStageDraft(stageSel).items[idxSel].itemType = el.value;
+      saveState();
+      render();
+    } else if(el.matches('[data-main-input]')){
+      var stage = el.getAttribute('data-main-input');
+      getStageDraft(stage).mainText = el.value;
+      saveState();
+      markAutosaved(stage);
+    } else if(el.matches('[data-item-field]')){
+      var stage2 = el.getAttribute('data-stage');
+      var idx = parseInt(el.getAttribute('data-item'),10);
+      var field = el.getAttribute('data-item-field');
+      getStageDraft(stage2).items[idx][field] = el.value;
+      saveState();
+      markAutosaved(stage2);
+    } else if(el.matches('[data-tool-field]')){
+      var stageT = el.getAttribute('data-stage');
+      var idxT = parseInt(el.getAttribute('data-tool'),10);
+      var fieldT = el.getAttribute('data-tool-field');
+      getStageDraft(stageT).tools[idxT][fieldT] = el.value;
+      saveState();
+      markAutosaved(stageT);
+    } else if(el.matches('[data-bind="roster"]')){
+      DRAFTS.roster = el.value;
+    } else if(el.matches('[data-feedback-input]')){
+      DRAFTS.feedback[el.getAttribute('data-feedback-input')] = el.value;
+    } else if(el.matches('[data-reply-input]')){
+      DRAFTS.reply[el.getAttribute('data-reply-input')] = el.value;
+    } else if(el.matches('[data-summary-input]')){
+      DRAFTS.summaryOverrides[el.getAttribute('data-summary-input')] = el.value;
+    } else if(el.matches('input[name="studentId"]')){
+      if(VIEW.screen==='studentLogin') DRAFTS.loginId = el.value;
+      if(VIEW.screen==='teacherDashboard') DRAFTS.newStudentId = el.value;
+    } else if(el.matches('input[name="name"]')){
+      if(VIEW.screen==='studentLogin') DRAFTS.loginName = el.value;
+      if(VIEW.screen==='teacherDashboard') DRAFTS.newStudentName = el.value;
+    } else if(el.matches('input[name="password"]') && VIEW.screen==='studentLogin'){
+      var pwHint = document.getElementById('pwHint');
+      if(pwHint) pwHint.classList.toggle('hidden', el.value.length>0);
+    } else if(el.matches('input[name="passcode"]') && VIEW.screen==='teacherAuth'){
+      DRAFTS.passcodeAttempt = el.value;
+    } else if(el.matches('input[name="teacherName"]') && VIEW.screen==='teacherAuth'){
+      DRAFTS.teacherNameAttempt = el.value;
+    } else if(el.matches('[data-deadline-stage]')){
+      DRAFTS.deadlineInputs[el.getAttribute('data-deadline-stage')] = el.value;
+    }
+  };
+  app.onchange = function(e){
+    var el = e.target;
+    if(el.matches('[data-item-file]')){
+      var parts = el.getAttribute('data-item-file').split('|');
+      var stage = parts[0], idx = parseInt(parts[1],10);
+      handleItemFiles(el, stage, idx);
+    }
+  };
+  app.onsubmit = function(e){
+    var form = e.target.closest('form');
+    if(!form) return;
+    e.preventDefault();
+    var kind = form.getAttribute('data-form');
+    handleForm(kind, form, e);
+  };
+}
+
+function handleItemFiles(inputEl, stage, idx){
+  var files = Array.prototype.slice.call(inputEl.files || []);
+  if(!files.length) return;
+  var oversized = files.filter(function(f){ return f.size > MAX_FILE_BYTES; });
+  var okFiles = files.filter(function(f){ return f.size <= MAX_FILE_BYTES; });
+  if(oversized.length){
+    toast('4MB를 초과하는 파일은 제외되었습니다: '+oversized.map(function(f){return f.name;}).join(', '));
+  }
+  Promise.all(okFiles.map(function(f){
+    return readFileAsDataURL(f).then(function(dataUrl){
+      return {name:f.name, mime:f.type, size:f.size, dataUrl:dataUrl};
+    });
+  })).then(function(results){
+    var draft = getStageDraft(stage);
+    draft.items[idx].files = draft.items[idx].files.concat(results);
+    inputEl.value = '';
+    saveState(true).then(render);
+  }).catch(function(){ toast('파일을 읽는 중 오류가 발생했습니다.'); });
+}
+
+function handleAction(action, el){
+  switch(action){
+    case 'go-home':
+      VIEW = { screen:'home', role:null, studentId:null, teacherAuthed:false, teacherName:null };
+      render(); break;
+    case 'open-help':
+      showHelp(true); break;
+    case 'close-help':
+      showHelp(false); break;
+    case 'enter-student':
+      VIEW.screen='studentLogin'; render(); break;
+    case 'enter-teacher':
+      VIEW.screen = STATE.meta.teacherPasscode ? 'teacherAuth' : 'teacherSetup';
+      render(); break;
+    case 'reset-passcode-hint':
+      toast('안전을 위해 비밀번호는 저장 파일(json)에 남아있습니다. 관리자에게 백업 파일을 확인해 달라고 요청하세요.'); break;
+    case 'back-to-dashboard':
+      VIEW.screen='teacherDashboard'; render(); break;
+    case 'open-student':
+      VIEW.studentId = el.getAttribute('data-id'); VIEW.screen='teacherStudentDetail'; render(); break;
+    case 'edit-subject':
+      VIEW.screen='teacherSetup'; render(); break;
+    case 'show-summary':
+      DRAFTS.summaryOverrides = {}; VIEW.screen='teacherSummary'; render(); break;
+    case 'add-item': {
+      var stage = el.getAttribute('data-stage');
+      getStageDraft(stage).items.push({title:'',description:'',files:[],itemType:''});
+      saveState(); render(); break;
+    }
+    case 'remove-item': {
+      var stage2 = el.getAttribute('data-stage'), idx = parseInt(el.getAttribute('data-item'),10);
+      var draft = getStageDraft(stage2);
+      draft.items.splice(idx,1);
+      if(!draft.items.length) draft.items.push({title:'',description:'',files:[],itemType:''});
+      saveState(); render(); break;
+    }
+    case 'remove-draft-file': {
+      var stage3 = el.getAttribute('data-stage'), idx2 = parseInt(el.getAttribute('data-item'),10), fi = parseInt(el.getAttribute('data-file'),10);
+      getStageDraft(stage3).items[idx2].files.splice(fi,1);
+      saveState(); render(); break;
+    }
+    case 'add-tool': {
+      var stageT = el.getAttribute('data-stage');
+      getStageDraft(stageT).tools.push({name:'',reference:''});
+      saveState(); render(); break;
+    }
+    case 'remove-tool': {
+      var stageT2 = el.getAttribute('data-stage'), tIdx = parseInt(el.getAttribute('data-tool'),10);
+      var draftT = getStageDraft(stageT2);
+      draftT.tools.splice(tIdx,1);
+      if(!draftT.tools.length) draftT.tools.push({name:'',reference:''});
+      saveState(); render(); break;
+    }
+    case 'reset-student-password': doResetStudentPassword(el.getAttribute('data-id')); break;
+    case 'approve-stage': doApproveStage(el.getAttribute('data-stage')); break;
+    case 'reopen-stage': doReopenStage(el.getAttribute('data-stage')); break;
+    case 'send-feedback': doSendFeedback(el.getAttribute('data-stage')); break;
+    case 'send-reply': doAddReply(el.getAttribute('data-stage'), el.getAttribute('data-root')); break;
+    case 'bulk-add-students': doBulkAddStudents(); break;
+    case 'export-state': doExportState(); break;
+    case 'download-file': doDownloadFileChip(el); break;
+    case 'trigger-import': document.getElementById('importFileInput').click(); break;
+    case 'regen-summary': delete DRAFTS.summaryOverrides[el.getAttribute('data-id')]; render(); break;
+    case 'copy-summary': doCopySummary(el.getAttribute('data-id')); break;
+    case 'export-summary': doExportSummary(); break;
+    case 'print-summary': window.print(); break;
+    default: break;
+  }
+}
+
+function showHelp(open){
+  var existing = document.querySelector('.modal-backdrop');
+  if(open && !existing){
+    document.getElementById('app').insertAdjacentHTML('beforeend', helpModal());
+  } else if(!open && existing){
+    existing.remove();
+  }
+}
+
+function handleForm(kind, form){
+  var fd = new FormData(form);
+  if(kind==='student-login'){
+    var id = (fd.get('studentId')||'').toString().trim();
+    var name = (fd.get('name')||'').toString().trim();
+    var password = (fd.get('password')||'').toString();
+    if(!id || !name || !password){ toast('학번, 이름, 비밀번호를 모두 입력하세요.'); return; }
+    var existingStudent = STATE.students[id];
+    if(existingStudent && existingStudent.passwordHash){
+      // returning student: verify their password
+      hashPassword(password, existingStudent.passwordSalt).then(function(hash){
+        if(hash !== existingStudent.passwordHash){
+          toast('비밀번호가 일치하지 않습니다. 비밀번호를 잊었다면 담당 선생님께 초기화를 요청하세요.');
+          return;
+        }
+        if(existingStudent.name !== name){
+          toast('주의: 등록된 이름("'+existingStudent.name+'")과 다릅니다. 계속 진행합니다.');
+        }
+        enterStudentDashboard(id);
+      });
+    } else {
+      // first login for this studentId: this password becomes their password
+      // (also covers students the teacher pre-added via the roster, who have
+      // no password set yet, and students created under the earlier version
+      // of this file before passwords existed). Only a brand-new password is
+      // checked against the format rule — an already-set password keeps
+      // working even if it predates this rule.
+      if(!PASSWORD_REGEX.test(password)){
+        toast('비밀번호는 숫자 또는 영문으로 6~10자 이내로 만들어 주세요. 예: study25');
+        return;
+      }
+      var salt = randomSalt();
+      hashPassword(password, salt).then(function(hash){
+        if(!existingStudent){
+          STATE.students[id] = newStudent(id, name);
+        } else if(existingStudent.name !== name){
+          toast('주의: 등록된 이름("'+existingStudent.name+'")과 다릅니다. 계속 진행합니다.');
+        }
+        STATE.students[id].passwordHash = hash;
+        STATE.students[id].passwordSalt = salt;
+        enterStudentDashboard(id, true);
+      });
+    }
+  } else if(kind==='teacher-auth'){
+    var pass = (fd.get('passcode')||'').toString();
+    var tname = (fd.get('teacherName')||'').toString().trim();
+    if(!tname){ toast('교사 이름을 입력하세요.'); return; }
+    if(pass !== STATE.meta.teacherPasscode){ toast('비밀번호가 올바르지 않습니다.'); return; }
+    if(!STATE.meta.teachers) STATE.meta.teachers = [];
+    if(STATE.meta.teachers.indexOf(tname)===-1){
+      if(STATE.meta.teachers.length >= MAX_TEACHERS_HINT){
+        var proceed = window.confirm('이미 '+MAX_TEACHERS_HINT+'명의 교사('+STATE.meta.teachers.join(', ')+')가 이 학급에 등록되어 있습니다. 그래도 "'+tname+'"(으)로 계속하시겠습니까?');
+        if(!proceed) return;
+      }
+      STATE.meta.teachers.push(tname);
+    }
+    VIEW.teacherAuthed = true; VIEW.role='teacher'; VIEW.teacherName = tname; VIEW.screen='teacherDashboard';
+    DRAFTS.passcodeAttempt=''; DRAFTS.teacherNameAttempt='';
+    saveState(true).then(render);
+  } else if(kind==='teacher-setup'){
+    var region = (fd.get('region')||'').toString().trim();
+    var schoolName = (fd.get('schoolName')||'').toString().trim();
+    var subjectName = (fd.get('subjectName')||'').toString().trim() || '개별 탐구 활동';
+    var className = (fd.get('className')||'').toString().trim();
+    var passcode = (fd.get('passcode')||'').toString();
+    var isFirstTime = !STATE.meta.teacherPasscode;
+    if(isFirstTime){
+      var setupName = (fd.get('teacherName')||'').toString().trim();
+      if(!setupName){ toast('담당 교사 이름을 입력하세요.'); return; }
+      if(!STATE.meta.teachers) STATE.meta.teachers = [];
+      if(STATE.meta.teachers.indexOf(setupName)===-1) STATE.meta.teachers.push(setupName);
+      VIEW.teacherName = setupName;
+    }
+    STATE.meta.region = region;
+    STATE.meta.schoolName = schoolName;
+    STATE.meta.subjectName = subjectName;
+    STATE.meta.className = className;
+    if(passcode) STATE.meta.teacherPasscode = passcode;
+    else if(isFirstTime){ toast('비밀번호를 설정하세요.'); return; }
+    VIEW.teacherAuthed = true; VIEW.role='teacher'; VIEW.screen='teacherDashboard';
+    saveState(true).then(function(){ render(); toast('저장되었습니다.'); });
+  } else if(kind==='deadlines'){
+    STAGE_ORDER.forEach(function(st){
+      var v = form.querySelector('[data-deadline-stage="'+st+'"]').value;
+      STATE.deadlines[st] = fromDatetimeLocalValue(v);
+    });
+    DRAFTS.deadlineInputs = {};
+    saveState(true).then(function(){ render(); toast('기한이 저장되었습니다.'); });
+  } else if(kind==='add-student'){
+    var sid = (fd.get('studentId')||'').toString().trim();
+    var sname = (fd.get('name')||'').toString().trim();
+    if(!sid || !sname){ toast('학번과 이름을 입력하세요.'); return; }
+    if(STATE.students[sid]){ toast('이미 등록된 학번입니다.'); return; }
+    STATE.students[sid] = newStudent(sid, sname);
+    DRAFTS.newStudentId=''; DRAFTS.newStudentName='';
+    saveState(true).then(function(){ render(); toast('학생이 추가되었습니다.'); });
+  } else if(kind==='stage-submit'){
+    doSubmitStage(form.getAttribute('data-stage'));
+  }
+}
+
+function resetAllDrafts(){
+  DRAFTS.stageForm = {}; DRAFTS.feedback = {}; DRAFTS.reply = {};
+}
+
+function enterStudentDashboard(id, justSetPassword){
+  VIEW.role='student'; VIEW.studentId=id; VIEW.screen='studentDashboard';
+  resetAllDrafts();
+  saveState(true).then(function(){
+    render();
+    if(justSetPassword) toast('비밀번호가 설정되었습니다. 다음부터는 이 비밀번호로 입장하세요.');
+  });
+}
+
+function doSubmitStage(stage){
+  var student = STATE.students[VIEW.studentId];
+  if(!student) return;
+  var draft = getStageDraft(stage);
+  var items = draft.items.filter(function(it){ return it.title || it.description || it.files.length || it.itemType; });
+  var tools = (draft.tools||[]).filter(function(t){ return t.name || t.reference; });
+  if(!draft.mainText.trim() && !items.length && !tools.length){
+    toast('내용을 입력하거나 조사 항목/활용 도구를 추가하세요.');
+    return;
+  }
+  if(stage==='final' && !hasRequiredGraphicItem(student, items)){
+    toast('최종 결과물에는 통계지도나 표 중 하나를 꼭 포함해야 해요. 조사 항목에서 자료 유형을 선택해 주세요.');
+    return;
+  }
+  var deadline = STATE.deadlines[stage];
+  var late = stage==='final' ? isPast(deadline) : false;
+  var entry = {
+    id: uid(), stage: stage, type:'submission', author:'student', authorName: student.name,
+    ts: nowISO(), mainText: draft.mainText.trim(), items: items, tools: tools, late: late, threadRoot: null
+  };
+  student.timeline.push(entry);
+  if(student.stageStatus[stage] !== 'approved'){
+    student.stageStatus[stage] = 'submitted';
+  }
+  if(stage==='final'){
+    student.presentationEligible = !late;
+  }
+  resetStageDraft(stage);
+  saveState(true).then(function(){ render(); toast('제출되었습니다.'); });
+}
+
+function doSendFeedback(stage){
+  var student = STATE.students[VIEW.studentId];
+  if(!student) return;
+  var key = stage+'|'+student.studentId;
+  var text = (DRAFTS.feedback[key]||'').trim();
+  if(!text){ toast('피드백 내용을 입력하세요.'); return; }
+  student.timeline.push({
+    id: uid(), stage: stage, type:'feedback', author:'teacher', authorName: currentTeacherName(),
+    ts: nowISO(), mainText: text, items: [], tools: [], threadRoot: null
+  });
+  DRAFTS.feedback[key] = '';
+  saveState(true).then(function(){ render(); toast('피드백을 남겼습니다.'); });
+}
+
+function doAddReply(stage, rootId){
+  var student = STATE.students[VIEW.studentId];
+  if(!student) return;
+  var text = (DRAFTS.reply[rootId]||'').trim();
+  if(!text){ toast('답글 내용을 입력하세요.'); return; }
+  var isTeacher = VIEW.role==='teacher';
+  student.timeline.push({
+    id: uid(), stage: stage, type:'comment',
+    author: isTeacher ? 'teacher' : 'student',
+    authorName: isTeacher ? currentTeacherName() : student.name,
+    ts: nowISO(), mainText: text, items: [], tools: [], threadRoot: rootId
+  });
+  DRAFTS.reply[rootId] = '';
+  saveState(true).then(function(){ render(); toast('답글을 남겼습니다.'); });
+}
+
+function doApproveStage(stage){
+  var student = STATE.students[VIEW.studentId];
+  if(!student) return;
+  student.stageStatus[stage] = 'approved';
+  var unlockedMsg = '';
+  if(stage==='stage1'){
+    var opened = [];
+    if(student.stageStatus.research==='locked'){ student.stageStatus.research='open'; opened.push('탐구 진행'); }
+    if(student.stageStatus.final==='locked'){ student.stageStatus.final='open'; opened.push('최종 결과물'); }
+    if(opened.length) unlockedMsg = ' '+opened.join('과 ')+' 단계를 진행할 수 있습니다.';
+  }
+  student.timeline.push({
+    id: uid(), stage: stage, type:'approval', author:'teacher', authorName: currentTeacherName(),
+    ts: nowISO(), mainText: STAGE_INFO[stage].label+' 단계를 승인했습니다.'+unlockedMsg, items:[], tools:[], threadRoot: null
+  });
+  saveState(true).then(function(){ render(); toast('승인되었습니다.'); });
+}
+
+function doReopenStage(stage){
+  var student = STATE.students[VIEW.studentId];
+  if(!student) return;
+  student.stageStatus[stage] = 'submitted';
+  student.timeline.push({
+    id: uid(), stage: stage, type:'reopen', author:'teacher', authorName: currentTeacherName(),
+    ts: nowISO(), mainText: STAGE_INFO[stage].label+' 단계에 대한 재검토를 요청했습니다.', items:[], tools:[], threadRoot: null
+  });
+  saveState(true).then(function(){ render(); toast('다시 열었습니다.'); });
+}
+
+function doResetStudentPassword(studentId){
+  var student = STATE.students[studentId];
+  if(!student) return;
+  var confirmReset = window.confirm(student.name+'('+student.studentId+') 학생의 비밀번호를 초기화할까요? 초기화 후 학생은 다음 입장 시 새 비밀번호를 설정하게 됩니다.');
+  if(!confirmReset) return;
+  student.passwordHash = null;
+  student.passwordSalt = null;
+  saveState(true).then(function(){ render(); toast('비밀번호가 초기화되었습니다.'); });
+}
+
+function doBulkAddStudents(){
+  var lines = DRAFTS.roster.split('\n').map(function(l){return l.trim();}).filter(Boolean);
+  var added = 0;
+  lines.forEach(function(line){
+    var parts = line.split(',');
+    if(parts.length<2) return;
+    var id = parts[0].trim(), name = parts.slice(1).join(',').trim();
+    if(!id || !name) return;
+    if(!STATE.students[id]){ STATE.students[id] = newStudent(id,name); added++; }
+  });
+  DRAFTS.roster = '';
+  saveState(true).then(function(){ render(); toast(added+'명이 추가되었습니다.'); });
+}
+
+function doCopySummary(id){
+  var text = DRAFTS.summaryOverrides[id];
+  if(text===undefined) text = generateSummaryText(STATE.students[id]);
+  var ta = document.createElement('textarea');
+  ta.value = text.replace(/<[^>]+>/g,'');
+  document.body.appendChild(ta); ta.select();
+  try{ document.execCommand('copy'); toast('복사되었습니다.'); }
+  catch(err){ toast('복사에 실패했습니다. 직접 선택해 복사하세요.'); }
+  document.body.removeChild(ta);
+}
+
+function doExportSummary(){
+  var ids = Object.keys(STATE.students).sort();
+  var lines = ids.map(function(id){
+    var text = DRAFTS.summaryOverrides[id];
+    if(text===undefined) text = generateSummaryText(STATE.students[id]);
+    return '['+id+'] '+text;
+  });
+  var blob = new Blob([lines.join('\n\n')], {type:'text/plain;charset=utf-8'});
+  offerDownload((STATE.meta.subjectName||'탐구활동')+'_세특요약.txt', blob);
+}
+
+/**
+ * Offers a generated file to the person using this page. When the page is
+ * running inside the Claude Artifact viewer, plain <a download> / blob-URL
+ * clicks are inert there, so we first try the viewer's own "downloads"
+ * capability (window.claude.use('downloads')). When that isn't present —
+ * which is the normal case once this file is downloaded and opened directly
+ * in a browser, or hosted on an ordinary web server — we fall back to the
+ * classic anchor-click download, which works fine in that context.
+ */
+function offerDownload(filename, blob){
+  function classicDownload(){
+    try{
+      var url = URL.createObjectURL(blob);
+      var a = document.createElement('a');
+      a.href = url; a.download = filename;
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      setTimeout(function(){ URL.revokeObjectURL(url); }, 4000);
+      toast('파일을 저장했습니다.');
+    }catch(err){
+      toast('파일 저장에 실패했습니다. 이 페이지를 다운로드해 직접 열어서 다시 시도해 주세요.');
+    }
+  }
+  if(window.claude && typeof window.claude.use === 'function'){
+    window.claude.use('downloads').then(function(downloads){
+      if(!downloads){ classicDownload(); return; }
+      downloads.save({filename: filename, data: blob}).then(function(){
+        toast('저장되었습니다.');
+      }).catch(function(err){
+        if(err && err.code === 'declined'){ toast('저장이 취소되었습니다.'); return; }
+        classicDownload();
+      });
+    }).catch(classicDownload);
+  } else {
+    classicDownload();
+  }
+}
+
+function doExportState(){
+  var blob = new Blob([JSON.stringify(STATE, null, 0)], {type:'application/json'});
+  var d = new Date();
+  var fname = (STATE.meta.subjectName||'탐구활동').replace(/[^a-zA-Z0-9가-힣]/g,'_') + '_백업_' + fmtDate(d.toISOString()).replace(/\./g,'') + '.json';
+  offerDownload(fname, blob);
+}
+
+function doDownloadFileChip(el){
+  var dataUrl = el.getAttribute('data-filechip-src');
+  var filename = el.getAttribute('data-filechip-name') || 'file';
+  fetch(dataUrl).then(function(r){ return r.blob(); }).then(function(blob){
+    offerDownload(filename, blob);
+  }).catch(function(){ toast('파일을 여는 중 오류가 발생했습니다.'); });
+}
+
+/* ============================== 가져오기 / 병합 ============================== */
+function mergeImportedState(imported, mode){
+  if(mode==='overwrite'){
+    STATE = imported;
+    migrateState(STATE);
+    return;
+  }
+  migrateState(imported);
+  // merge: keep local meta/deadlines, merge students + teacher roster only
+  if(!STATE.students) STATE.students = {};
+  if(!STATE.meta.teachers) STATE.meta.teachers = [];
+  (imported.meta && imported.meta.teachers || []).forEach(function(n){
+    if(STATE.meta.teachers.indexOf(n)===-1) STATE.meta.teachers.push(n);
+  });
+  Object.keys(imported.students||{}).forEach(function(id){
+    var incoming = imported.students[id];
+    var local = STATE.students[id];
+    if(!local){
+      STATE.students[id] = incoming;
+      return;
+    }
+    var seen = {};
+    var merged = local.timeline.concat(incoming.timeline).filter(function(en){
+      if(seen[en.id]) return false;
+      seen[en.id] = true; return true;
+    }).sort(function(a,b){ return new Date(a.ts) - new Date(b.ts); });
+    local.timeline = merged;
+    STAGE_ORDER.forEach(function(st){
+      var a = local.stageStatus[st], b = (incoming.stageStatus||{})[st];
+      if(b && stageRank(b) > stageRank(a)) local.stageStatus[st] = b;
+    });
+    local.presentationEligible = local.presentationEligible || incoming.presentationEligible;
+    if(!local.name && incoming.name) local.name = incoming.name;
+    if(!local.passwordHash && incoming.passwordHash){
+      local.passwordHash = incoming.passwordHash;
+      local.passwordSalt = incoming.passwordSalt;
+    }
+  });
+}
+
+function handleImportFile(file){
+  var reader = new FileReader();
+  reader.onload = function(){
+    var data;
+    try{ data = JSON.parse(reader.result); }
+    catch(err){ toast('올바른 백업 파일이 아닙니다.'); return; }
+    if(!data || !data.meta || !data.students){ toast('올바른 백업 파일이 아닙니다.'); return; }
+    var mode = window.confirm(
+      '불러오기 방식을 선택하세요.\n\n[확인] = 전체 덮어쓰기 (이 파일의 학급 설정·학생 기록으로 완전히 교체)\n[취소] = 학생 기록만 병합 (현재 설정은 유지하고 학생별 기록만 합침)'
+    ) ? 'overwrite' : 'merge';
+    mergeImportedState(data, mode);
+    saveState(true).then(function(){
+      VIEW = { screen:'home', role:null, studentId:null, teacherAuthed:false, teacherName:null };
+      render();
+      toast(mode==='overwrite' ? '전체 데이터를 불러왔습니다.' : '학생 기록을 병합했습니다.');
+    });
+  };
+  reader.readAsText(file);
+}
+
+/* ============================== 초기화 ============================== */
+function init(){
+  document.getElementById('importFileInput').addEventListener('change', function(e){
+    var f = e.target.files && e.target.files[0];
+    if(f) handleImportFile(f);
+    e.target.value = '';
+  });
+  dbGet('state').then(function(saved){
+    STATE = saved || defaultState();
+    if(!STATE.students) STATE.students = {};
+    if(!STATE.deadlines) STATE.deadlines = {stage1:null, research:null, final:null};
+    if(!STATE.meta.teachers) STATE.meta.teachers = [];
+    var changed = migrateState(STATE);
+    if(changed){ saveState(true).then(render); } else { render(); }
+  }).catch(function(){
+    STATE = defaultState();
+    render();
+    toast('이 브라우저는 저장 기능을 지원하지 않아 새로고침 시 기록이 사라질 수 있습니다.');
+  });
+}
+init();
+})();
+</script>
+</body>
+</html>
