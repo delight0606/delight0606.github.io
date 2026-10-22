@@ -1091,6 +1091,8 @@ var CLOUD_SYNC = { lastOkAt: null, lastError: null, syncing: false };
 var CLOUD_PUSH_TIMER = null;
 var CLOUD_PENDING = { meta: false, ids: {}, full: false };
 var CLOUD_DIRTY_IDS = {}; // ids currently queued or in-flight for push — never overwritten by an incoming pull
+var CLOUD_META_DIRTY = false; // meta/deadlines currently queued or in-flight for push — same protection as CLOUD_DIRTY_IDS, but for meta
+var CLOUD_FULL_PUSH_DIRTY = false; // a full-tree PUT (init-time seed, or backup restore) is queued or in-flight — while true, NOTHING from an incoming pull should be merged in, or it could partially overwrite what we're in the middle of pushing
 var CLOUD_POLL_TIMER = null;
 var CLOUD_POLL_MS = 7000;
 
@@ -1198,9 +1200,11 @@ function scheduleCloudPush(hint){
   }
   if(hint.type==='full'){
     CLOUD_PENDING = {meta:false, ids:{}, full:true};
+    CLOUD_FULL_PUSH_DIRTY = true;
   } else if(!CLOUD_PENDING.full){
     if(hint.type==='meta'){
       CLOUD_PENDING.meta = true;
+      CLOUD_META_DIRTY = true;
     } else if(hint.type==='student' && hint.id){
       CLOUD_PENDING.ids[hint.id] = true;
       CLOUD_DIRTY_IDS[hint.id] = true;
@@ -1217,7 +1221,19 @@ function flushCloudPush(){
   var pending = CLOUD_PENDING;
   CLOUD_PENDING = {meta:false, ids:{}, full:false};
   if(pending.full){
-    cloudPushFull(STATE).then(function(){ CLOUD_DIRTY_IDS = {}; });
+    cloudPushFull(STATE).then(function(ok){
+      if(ok){ CLOUD_DIRTY_IDS = {}; CLOUD_FULL_PUSH_DIRTY = false; }
+      else {
+        // The push failed (network/offline/timeout) -- re-queue it instead of
+        // silently giving up. Leaving CLOUD_DIRTY_IDS/CLOUD_FULL_PUSH_DIRTY
+        // alone here would be wrong too (this is a full-tree push, not
+        // per-id), but since nothing was actually sent, trying again shortly
+        // is the safe move. CLOUD_FULL_PUSH_DIRTY stays true in the meantime
+        // so an incoming poll never merges in stale cloud data on top of
+        // what we're still trying to push (see applyCloudSnapshot).
+        scheduleCloudPush({type:'full'});
+      }
+    });
     return;
   }
   var idsToSend = Object.keys(pending.ids);
@@ -1232,8 +1248,21 @@ function flushCloudPush(){
     }
   });
   if(!any) return;
-  cloudPush(patch).then(function(){
-    idsToSend.forEach(function(id){ delete CLOUD_DIRTY_IDS[id]; });
+  cloudPush(patch).then(function(ok){
+    if(ok){
+      idsToSend.forEach(function(id){ delete CLOUD_DIRTY_IDS[id]; });
+      if(pending.meta) CLOUD_META_DIRTY = false;
+    } else {
+      // IMPORTANT: do NOT clear CLOUD_DIRTY_IDS/CLOUD_META_DIRTY here. The
+      // push failed, so the cloud still has the OLD version of these --
+      // clearing the dirty flag would let the next poll's (stale) pull
+      // silently overwrite the local edit we just tried (and failed) to
+      // send, reverting it without any warning. Keep them dirty and re-queue
+      // so a transient failure self-heals once the connection recovers,
+      // instead of either losing the edit or leaving it stuck dirty forever.
+      if(pending.meta) scheduleCloudPush({type:'meta'});
+      if(idsToSend.length) scheduleCloudPush({type:'students', ids: idsToSend});
+    }
   });
 }
 
@@ -1249,8 +1278,15 @@ function flushCloudPush(){
  */
 function applyCloudSnapshot(cloud){
   if(!cloud || typeof cloud !== 'object' || !STATE) return false;
+  // A full-tree PUT (init-time cloud seeding, or a backup restore) is still
+  // queued or in-flight for THIS device -- its payload already reflects
+  // everything local+authoritative right now, so merging in anything from an
+  // incoming (necessarily older, from the cloud's point of view) snapshot
+  // here could partially overwrite what we're still in the middle of
+  // pushing. Wait for that push to settle before applying anything.
+  if(CLOUD_FULL_PUSH_DIRTY) return false;
   var changed = false;
-  var skipMeta = (VIEW.screen === 'teacherSetup'); // 학교/학급 정보를 막 수정 중일 수 있으므로 건드리지 않음
+  var skipMeta = (VIEW.screen === 'teacherSetup') || CLOUD_META_DIRTY; // 학교/학급 정보를 막 수정 중이거나(화면) 아직 전송 중/전송 예정(CLOUD_META_DIRTY)이면 건드리지 않음
   // 실제로 값이 달라졌을 때만 changed를 true로 표시합니다 — 그래야 7초마다
   // 도는 폴링이 "아무 변화도 없는데" 매번 화면을 다시 그려서, 마침 누군가
   // 입력 중이던 화면의 포커스/커서 위치를 흔드는 일을 막을 수 있습니다.
@@ -2871,6 +2907,17 @@ function handleForm(kind, form){
     var name = (fd.get('name')||'').toString().trim();
     var password = (fd.get('password')||'').toString();
     if(!id || !name || !password){ toast('학번, 이름, 비밀번호를 모두 입력하세요.'); return; }
+    // Always refresh from the cloud right before deciding "returning student"
+    // vs. "first login" for this id. Without this, "we just don't have this
+    // student cached on THIS device yet" (a slow sync, or a pull that hasn't
+    // landed) looked identical to "this student has genuinely never
+    // registered" -- and the first-login branch would then silently create a
+    // brand-new blank record and push it over the student's real existing
+    // cloud record via PATCH, wiping their actual history/password. Pulling
+    // first means a student who DOES already exist in the cloud (just added
+    // by the teacher moments ago, or registered from a different computer)
+    // gets recognized correctly instead of being re-created from scratch.
+    pullFromCloud().then(function(){
     var existingStudent = STATE.students[id];
     if(existingStudent && existingStudent.passwordHash){
       // returning student: verify their password
@@ -2884,6 +2931,14 @@ function handleForm(kind, form){
         }
         enterStudentDashboard(id);
       });
+    } else if(!existingStudent && CLOUD_ENABLED && CLOUD_SYNC.lastError){
+      // The cloud refresh we just attempted failed (network/offline/timeout),
+      // and we have no local record for this id either -- we genuinely don't
+      // know whether this student already exists in the cloud. Proceeding as
+      // "first login" here would risk creating a duplicate/blank account on
+      // top of a real one we simply couldn't see. Ask them to retry instead
+      // of guessing.
+      toast('서버와 연결이 원활하지 않아 학번을 확인할 수 없습니다. 네트워크 연결을 확인하고 잠시 후 다시 시도해주세요.');
     } else {
       // first login for this studentId: this password becomes their password
       // (also covers students the teacher pre-added via the roster, who have
@@ -2907,6 +2962,7 @@ function handleForm(kind, form){
         enterStudentDashboard(id, true);
       });
     }
+    });
   } else if(kind==='teacher-auth'){
     var pass = (fd.get('passcode')||'').toString();
     var tname = (fd.get('teacherName')||'').toString().trim();
@@ -2957,10 +3013,21 @@ function handleForm(kind, form){
     var sid = (fd.get('studentId')||'').toString().trim();
     var sname = (fd.get('name')||'').toString().trim();
     if(!sid || !sname){ toast('학번과 이름을 입력하세요.'); return; }
-    if(STATE.students[sid]){ toast('이미 등록된 학번입니다.'); return; }
-    STATE.students[sid] = newStudent(sid, sname);
-    DRAFTS.newStudentId=''; DRAFTS.newStudentName='';
-    saveState(true, {type:'student', id: sid}).then(function(){ render(); toast('학생이 추가되었습니다.'); });
+    // Refresh from the cloud before checking for a duplicate. Without this,
+    // a student already added (by another teacher, on another computer, or
+    // just not yet synced to THIS device) could look "not registered yet"
+    // here, and adding them would silently create a blank record and push it
+    // over their real one -- wiping whatever they'd already submitted.
+    pullFromCloud().then(function(){
+      if(STATE.students[sid]){ toast('이미 등록된 학번입니다.'); return; }
+      if(CLOUD_ENABLED && CLOUD_SYNC.lastError){
+        toast('서버와 연결이 원활하지 않아 중복 등록 여부를 확인할 수 없습니다. 네트워크 연결을 확인하고 잠시 후 다시 시도해주세요.');
+        return;
+      }
+      STATE.students[sid] = newStudent(sid, sname);
+      DRAFTS.newStudentId=''; DRAFTS.newStudentName='';
+      saveState(true, {type:'student', id: sid}).then(function(){ render(); toast('학생이 추가되었습니다.'); });
+    });
   } else if(kind==='stage-submit'){
     doSubmitStage(form.getAttribute('data-stage'));
   }
@@ -3285,9 +3352,20 @@ function doBulkAddStudents(){
     if(parts.length<2) return null;
     return { id: parts[0].trim(), name: parts.slice(1).join(',').trim() };
   }).filter(Boolean);
-  var addedIds = addRosterEntries(entries);
-  DRAFTS.roster = '';
-  saveState(true, {type:'students', ids: addedIds}).then(function(){ render(); toast(addedIds.length+'명이 추가되었습니다.'); });
+  // Refresh from the cloud first -- addRosterEntries() only skips ids already
+  // present in STATE.students, so any id this device hasn't synced yet (added
+  // by another teacher/computer, or just not caught up) would otherwise look
+  // "new" and get silently recreated blank, overwriting that student's real
+  // record on the next push.
+  pullFromCloud().then(function(){
+    if(CLOUD_ENABLED && CLOUD_SYNC.lastError){
+      toast('서버와 연결이 원활하지 않아 중복 등록 여부를 확인할 수 없습니다. 네트워크 연결을 확인하고 잠시 후 다시 시도해주세요.');
+      return;
+    }
+    var addedIds = addRosterEntries(entries);
+    DRAFTS.roster = '';
+    saveState(true, {type:'students', ids: addedIds}).then(function(){ render(); toast(addedIds.length+'명이 추가되었습니다.'); });
+  });
 }
 
 function doDownloadRosterTemplate(){
@@ -3296,12 +3374,18 @@ function doDownloadRosterTemplate(){
 }
 
 function doUploadRosterExcel(file){
-  file.arrayBuffer().then(function(buf){
-    return parseXlsxToRows(buf);
-  }).then(function(rows){
+  Promise.all([file.arrayBuffer().then(parseXlsxToRows), pullFromCloud()]).then(function(results){
+    var rows = results[0];
     var entries = extractRosterFromRows(rows);
     if(!entries.length){
       toast('엑셀 파일에서 학번/이름을 찾지 못했어요. 양식을 내려받아 그 형식대로 작성했는지 확인해 주세요.');
+      return;
+    }
+    // See doBulkAddStudents() -- the cloud refresh above (pullFromCloud) must
+    // happen before checking for duplicates, or an id this device hasn't
+    // synced yet could get silently recreated blank over a real record.
+    if(CLOUD_ENABLED && CLOUD_SYNC.lastError){
+      toast('서버와 연결이 원활하지 않아 중복 등록 여부를 확인할 수 없습니다. 네트워크 연결을 확인하고 잠시 후 다시 시도해주세요.');
       return;
     }
     var addedIds = addRosterEntries(entries);
