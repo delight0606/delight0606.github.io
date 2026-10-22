@@ -1121,14 +1121,35 @@ function cloudFetchJSON(url, opts, timeoutMs){
   });
 }
 
+/**
+ * 반환값은 { ok, data } 입니다 — ok와 data를 분리하는 이유가 중요합니다.
+ * data가 null인 경우가 두 가지인데, 절대 같은 의미가 아닙니다:
+ *   (1) 클라우드에 정말 아무것도 없는 경우(ok:true, Firebase가 빈 경로에
+ *       정상적으로 null을 반환) — 이때는 "이 학급이 처음 쓰이는 중"이라고
+ *       봐도 안전합니다.
+ *   (2) 요청 자체가 실패한 경우(timeout, 네트워크 끊김, 일시적 오류 등,
+ *       ok:false) — 이때는 클라우드에 데이터가 있는지 없는지 전혀 알 수
+ *       없습니다. 그런데 과거 버전은 이 두 경우를 구분하지 않고 똑같이
+ *       "null"만 반환했고, init()은 "null이면 클라우드가 비어있다"로
+ *       해석해서 이 기기의 로컬 상태를 클라우드에 통째로 덮어썼습니다
+ *       (아래 init()의 full-seed 분기). 그 결과 신입생이 처음 접속한
+ *       기기에서 흔한 네트워크 지연/일시 오류 한 번만 발생해도(특히 로컬
+ *       저장공간이 비어있는 "방금 연 기기"일수록 피해가 큼) 학급 전체의
+ *       실제 데이터(다른 학생들의 가입·비밀번호 포함)가 그 기기의 거의
+ *       빈 상태로 통째로 덮어써지는 심각한 데이터 유실 버그였습니다 —
+ *       "가입이 안 된다", "가입했는데 로그인하니 기록이 사라졌다" 증상과
+ *       정확히 일치합니다. 지금처럼 ok를 분리해 두면, init()에서 (2)의
+ *       경우에는 절대 덮어쓰기를 시도하지 않고 그냥 "이번엔 클라우드를
+ *       못 읽었을 뿐"으로 안전하게 넘어갑니다.
+ */
 function cloudPull(){
-  if(!CLOUD_ENABLED) return Promise.resolve(null);
+  if(!CLOUD_ENABLED) return Promise.resolve({ok:true, data:null});
   return cloudFetchJSON(cloudUrl(), {method:'GET'}, 5000).then(function(data){
     CLOUD_SYNC.lastOkAt = nowISO(); CLOUD_SYNC.lastError = null;
-    return data;
+    return {ok:true, data:data};
   }).catch(function(err){
     CLOUD_SYNC.lastError = String((err && err.message) || err);
-    return null;
+    return {ok:false, data:null};
   });
 }
 
@@ -1277,9 +1298,9 @@ function applyCloudSnapshot(cloud){
 function pullFromCloud(){
   if(!CLOUD_ENABLED || !STATE || CLOUD_SYNC.syncing) return Promise.resolve();
   CLOUD_SYNC.syncing = true;
-  return cloudPull().then(function(cloud){
+  return cloudPull().then(function(pullResult){
     CLOUD_SYNC.syncing = false;
-    var changed = applyCloudSnapshot(cloud);
+    var changed = applyCloudSnapshot(pullResult.data);
     if(changed){
       dbSet('state', STATE);
       var modalOpen = document.querySelector('.modal-backdrop, .celebrate-backdrop');
@@ -2759,7 +2780,14 @@ function handleAction(action, el){
     case 'close-celebration':
       closeCelebration(); break;
     case 'enter-student':
-      VIEW.screen='studentLogin'; render(); break;
+      VIEW.screen='studentLogin'; render();
+      // A roster entry the teacher just added on another computer, or another
+      // student's just-set password, might not have reached this device's
+      // local copy yet (the periodic poll can be up to 7s behind) -- pull
+      // right away so a login/signup attempt here sees the freshest data
+      // instead of a stale "등록되지 않은 학번" false negative.
+      pullFromCloud();
+      break;
     case 'enter-teacher':
       VIEW.screen = STATE.meta.teacherPasscode ? 'teacherAuth' : 'teacherSetup';
       render(); break;
@@ -3404,7 +3432,8 @@ function doDownloadFileChip(el){
 /* ============================== 초기화 ============================== */
 function init(){
   Promise.all([dbGet('state').catch(function(){ return null; }), cloudPull()]).then(function(results){
-    var saved = results[0], cloud = results[1];
+    var saved = results[0], pullResult = results[1];
+    var cloud = pullResult.data;
     STATE = saved || defaultState();
     if(!STATE.students) STATE.students = {};
     if(!STATE.deadlines) STATE.deadlines = {stage1:null, research:null, final:null};
@@ -3414,10 +3443,18 @@ function init(){
     var changed = migrateState(STATE);
     if(changed || cloudApplied){ saveState(true).then(render); } else { render(); }
     startCloudPolling();
-    if(CLOUD_ENABLED && !cloud){
-      // Nothing in the cloud yet for this class — seed it with whatever this
-      // device already has locally, so the very first computer to sync
-      // becomes the cloud's starting point rather than losing its data.
+    // CRITICAL: only seed the cloud with this device's local state when we got
+    // a CONFIRMED-successful empty response from Firebase (pullResult.ok is
+    // true AND there was genuinely nothing there yet). If the pull merely
+    // FAILED (timeout, offline, transient error -- pullResult.ok is false), we
+    // have no idea whether the cloud already holds real data, so we must NOT
+    // treat that as "empty" -- doing so used to overwrite the entire class's
+    // real data (every other student's signup/password, the teacher's
+    // passcode) with whatever this one device happens to have locally, which
+    // for a brand-new student opening the page for the very first time is
+    // close to nothing. This was the root cause of students' signups
+    // "failing" or silently disappearing later.
+    if(CLOUD_ENABLED && pullResult.ok && !cloud){
       scheduleCloudPush({type:'full'});
     }
   }).catch(function(){
