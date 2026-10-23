@@ -1182,6 +1182,23 @@ function cloudPushFull(fullState){
 }
 
 /**
+ * 클라우드에서 하나의 경로(예: 'students/10305')를 통째로 삭제합니다
+ * (Firebase REST의 DELETE 메서드). 학생 삭제 기능(doDeleteStudent)에서만
+ * 사용합니다 — 평소의 PATCH 전송과 달리 이 요청은 해당 경로 전체를
+ * 지우는 되돌릴 수 없는 작업이라 별도 함수로 분리해 두었습니다.
+ */
+function cloudDeletePath(path){
+  if(!CLOUD_ENABLED) return Promise.resolve(false);
+  return cloudFetchJSON(CLOUD_BASE + '/' + path + '.json', {method:'DELETE'}, 8000).then(function(){
+    CLOUD_SYNC.lastOkAt = nowISO(); CLOUD_SYNC.lastError = null;
+    return true;
+  }).catch(function(err){
+    CLOUD_SYNC.lastError = String((err && err.message) || err);
+    return false;
+  });
+}
+
+/**
  * saveState()가 호출될 때마다(=STATE가 바뀔 때마다) 무엇을 클라우드에 올릴지
  * "예약"합니다. 실제 전송은 400ms 동안 추가 호출을 모아서(debounce) 한 번에
  * 나갑니다. hint를 명시하지 않으면 "지금 화면에 열려 있는 학생"을 바꾼
@@ -1301,12 +1318,29 @@ function applyCloudSnapshot(cloud){
   }
   var focusedId = VIEW.studentId;
   var cloudStudents = cloud.students || {};
+  // 교사가 삭제한 학번 목록(tombstone) — 클라우드의 meta를 우선 쓰고(가장
+  // 최신이므로), 이번 스냅샷에 meta가 없다면(드물게 skipMeta 등) 로컬에
+  // 이미 저장된 목록으로 대체합니다.
+  var deletedIds = (cloud.meta && cloud.meta.deletedStudentIds) || STATE.meta.deletedStudentIds || [];
   Object.keys(cloudStudents).forEach(function(id){
     if(id === focusedId) return;
     if(CLOUD_DIRTY_IDS[id]) return;
     if(JSON.stringify(cloudStudents[id]) === JSON.stringify(STATE.students[id])) return;
     STATE.students[id] = cloudStudents[id];
     changed = true;
+  });
+  // 삭제된 학번이 이 기기의 로컬 저장소(IndexedDB)에는 아직 남아있을 수
+  // 있습니다 — 예를 들어 그 학생이 삭제되기 전에 자신의 휴대폰에서 이미
+  // 로그인해 둔 적이 있는 경우처럼요. 클라우드를 성공적으로 읽어올 때마다
+  // 그런 학번을 이 기기에서도 함께 지워서, "다른 기기에서는 삭제됐는데 이
+  // 기기에서는 계속 보인다" 상태가 오래 남지 않도록 합니다. 지금 화면에
+  // 열려 있는 학생(focusedId)은 건드리지 않습니다 — 교사가 보고 있는 중에
+  // 화면 아래서 갑자기 사라지면 더 혼란스러울 수 있어서, 다음 화면 전환 때
+  // 자연스럽게 정리되도록 둡니다.
+  deletedIds.forEach(function(id){
+    if(id === focusedId) return;
+    if(STATE.students[id]){ delete STATE.students[id]; changed = true; }
+    if(CLOUD_DIRTY_IDS[id]) delete CLOUD_DIRTY_IDS[id];
   });
   // 복구(reconciliation): 로컬에는 있지만 이 "성공적으로 읽어온" 클라우드
   // 스냅샷에는 전혀 없는 학생이 있다면, 그 학생의 가입/제출 내용이 지금까지
@@ -1322,6 +1356,7 @@ function applyCloudSnapshot(cloud){
   var idsMissingFromCloud = [];
   Object.keys(STATE.students).forEach(function(id){
     if(id === focusedId) return;
+    if(deletedIds.indexOf(id) !== -1) return; // 교사가 삭제한 학번은 복구 대상이 아님 — 되살리지 않음
     if(!cloudStudents[id]) idsMissingFromCloud.push(id);
   });
   if(idsMissingFromCloud.length) scheduleCloudPush({type:'students', ids: idsMissingFromCloud});
@@ -1397,6 +1432,9 @@ function defaultState(){
       className:'',
       teacherPasscode:null,
       teachers:[],
+      deletedStudentIds:[], // 교사가 삭제한 학번 목록(tombstone) — 삭제된 학생이 아직 소식을
+                            // 못 받은 다른 기기(예: 그 학생 본인 휴대폰)의 로컬 저장소에 남아
+                            // 있다가 클라우드 동기화 때 "되살아나는" 것을 막는 데 쓰입니다.
       createdAt:t, updatedAt:t
     },
     deadlines:{ stage1:null, research:null, final:null },
@@ -1450,6 +1488,7 @@ function touchMeta(){ STATE.meta.updatedAt = nowISO(); }
 function migrateState(state){
   var changed = false;
   if(!state.meta.teachers){ state.meta.teachers = []; changed = true; }
+  if(!state.meta.deletedStudentIds){ state.meta.deletedStudentIds = []; changed = true; }
   if(state.meta.region===undefined){ state.meta.region = ''; changed = true; }
   if(state.meta.schoolName===undefined){ state.meta.schoolName = ''; changed = true; }
   Object.keys(state.students||{}).forEach(function(id){
@@ -2078,6 +2117,10 @@ function screenTeacherStudentDetail(){
       (student.passwordHash?
         '<button class="ghost small" data-action="reset-student-password" data-id="'+escapeHtml(student.studentId)+'">🔑 비밀번호 초기화</button> <span class="faint" style="font-size:12.5px;">초기화하면 학생이 다음 입장 시 새 비밀번호를 설정합니다.</span>'
         : '<span class="faint" style="font-size:12.5px;">아직 비밀번호를 설정하지 않은 학생입니다(첫 입장 시 설정됨).</span>') +
+    '</div>' +
+    '<div class="no-print" style="margin-top:8px;">' +
+      '<button class="small danger" data-action="delete-student" data-id="'+escapeHtml(student.studentId)+'" title="이 학생의 가입 정보와 모든 기록을 영구적으로 삭제합니다.">🗑 학생 삭제</button> ' +
+      '<span class="faint" style="font-size:12.5px;">잘못 등록된 학번·중복 가입을 삭제합니다. 삭제 후 되돌릴 수 없습니다.</span>' +
     '</div>' +
   '</div>' +
   accessLogHtml(student) +
@@ -2885,6 +2928,7 @@ function handleAction(action, el){
     }
     case 'reset-student-password': doResetStudentPassword(el.getAttribute('data-id')); break;
     case 'reset-all-passwords': doResetAllPasswords(); break;
+    case 'delete-student': doDeleteStudent(el.getAttribute('data-id')); break;
     case 'export-backup': doExportBackup(); break;
     case 'approve-stage': doApproveStage(el.getAttribute('data-stage')); break;
     case 'final-approve': doApproveFinal(); break;
@@ -3314,6 +3358,61 @@ function doResetStudentPassword(studentId){
   student.passwordHash = null;
   student.passwordSalt = null;
   saveState(true, {type:'student', id: studentId}).then(function(){ render(); toast('비밀번호가 초기화되었습니다.'); });
+}
+
+/**
+ * 교사가 가입자(학생) 한 명을 명단에서 완전히 삭제합니다. 오타로 잘못
+ * 등록된 학번, 중복 가입, 장난 가입 등을 바로잡기 위한 기능입니다.
+ *
+ * 되돌릴 수 없는 작업입니다 — 이 학생의 모든 기록(제출물·피드백·접속
+ * 기록·비밀번호)이 함께 영구적으로 삭제되므로, 실행 전 이름·학번을 보여주며
+ * 한 번 더 확인합니다.
+ *
+ * 한계: 이 삭제는 이 기기의 로컬 저장소와 클라우드 양쪽에서 즉시 이
+ * 학생을 지웁니다. 다만 그 학생이 삭제되기 전 다른 기기(예: 본인
+ * 휴대폰)에 이미 로그인해 둔 적이 있고, 그 기기가 삭제 소식을 받기 전에
+ * (오프라인 상태였거나 앱이 열려 있던 채로) 자신의 로컬 기록을 클라우드로
+ * 다시 보내려 하면 삭제가 되돌아갈 수 있습니다 — applyCloudSnapshot의
+ * "복구" 로직이 원래는 실패한 전송을 되살리기 위한 것이기 때문입니다.
+ * 이를 막기 위해 삭제된 학번을 STATE.meta.deletedStudentIds에 남겨 두고,
+ * 모든 기기가 클라우드를 읽어올 때마다(applyCloudSnapshot) 이 목록에 있는
+ * 학번은 복구 대상에서 제외하고 로컬에서도 함께 지웁니다.
+ */
+function doDeleteStudent(studentId){
+  var student = STATE.students[studentId];
+  if(!student) return;
+  var confirmDelete = window.confirm(
+    '⚠ 학생 삭제 — 되돌릴 수 없습니다\n\n' +
+    student.name+'('+student.studentId+') 학생의 가입 정보와 모든 기록(제출물·피드백·접속 기록·비밀번호)이 ' +
+    '영구적으로 삭제됩니다. 삭제 후에는 복구할 수 없으며, 같은 학번으로 다시 가입하면 완전히 새로운 기록으로 시작합니다.\n\n' +
+    '정말 "'+student.name+'('+student.studentId+')" 학생을 삭제할까요?'
+  );
+  if(!confirmDelete) return;
+  var studentName = student.name;
+  delete STATE.students[studentId];
+  if(!STATE.meta.deletedStudentIds) STATE.meta.deletedStudentIds = [];
+  if(STATE.meta.deletedStudentIds.indexOf(studentId) === -1){
+    STATE.meta.deletedStudentIds.push(studentId);
+  }
+  delete CLOUD_DIRTY_IDS[studentId];
+  if(VIEW.studentId === studentId) VIEW.studentId = null;
+  VIEW.screen = 'teacherDashboard';
+  saveState(true, {type:'meta'}).then(function(){
+    render();
+    toast(studentName+' 학생이 삭제되었습니다.');
+  });
+  if(CLOUD_ENABLED){
+    cloudDeletePath('students/'+studentId).then(function(ok){
+      if(!ok){
+        window.alert(
+          '⚠ 삭제 내용이 서버(클라우드)에는 반영되지 못했습니다.\n\n' +
+          '이 기기에서는 방금 삭제되어 더 이상 보이지 않지만, 네트워크 문제로 서버에는 아직 ' +
+          '전달되지 못해 다른 컴퓨터·기기에서는 이 학생이 계속 보일 수 있습니다. 네트워크 연결을 ' +
+          '확인한 뒤, 학생 명단에 이 학생이 다시 나타난다면 삭제를 한 번 더 시도해 주세요.'
+        );
+      }
+    });
+  }
 }
 
 /**
