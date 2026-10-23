@@ -1308,6 +1308,23 @@ function applyCloudSnapshot(cloud){
     STATE.students[id] = cloudStudents[id];
     changed = true;
   });
+  // 복구(reconciliation): 로컬에는 있지만 이 "성공적으로 읽어온" 클라우드
+  // 스냅샷에는 전혀 없는 학생이 있다면, 그 학생의 가입/제출 내용이 지금까지
+  // 단 한 번도 클라우드에 도착하지 못했다는 뜻입니다(예: 가입 직후 푸시가
+  // 실패했는데, 재시도가 끝나기 전에 학생이 탭을 닫아버린 경우 — 재시도
+  // 상태(CLOUD_DIRTY_IDS)는 메모리에만 있어서 새로고침/재접속하면 사라지고,
+  // 그 뒤로는 우연히 이 학생에 대해 다시 저장이 일어나기 전까지 영영 재시도
+  // 될 기회가 없었습니다). 클라우드를 성공적으로 읽어올 때마다(= 이 함수가
+  // 실제로 호출될 때마다) 그런 학생을 찾아 다시 푸시를 예약해서, 이후 같은
+  // 기기나 다른 기기에서 조금이라도 연결이 되는 순간 스스로 복구되게
+  // 합니다. (완전히 막힌 네트워크 자체를 고칠 수는 없지만, 일시적인 실패였을
+  // 경우 다음 접속/폴링에서 반드시 다시 시도됩니다.)
+  var idsMissingFromCloud = [];
+  Object.keys(STATE.students).forEach(function(id){
+    if(id === focusedId) return;
+    if(!cloudStudents[id]) idsMissingFromCloud.push(id);
+  });
+  if(idsMissingFromCloud.length) scheduleCloudPush({type:'students', ids: idsMissingFromCloud});
   if(changed) migrateState(STATE);
   return changed;
 }
@@ -2960,6 +2977,24 @@ function handleForm(kind, form){
         STATE.students[id].passwordHash = hash;
         STATE.students[id].passwordSalt = salt;
         enterStudentDashboard(id, true);
+        // 새로 가입한 학생 1명의 기록을 지금 바로(평소의 400ms 디바운스 큐와는
+        // 별도로) 한 번 더 직접 전송해 보고, 그 결과를 학생에게 명확히
+        // 알려줍니다. 화면만 보면 "가입 완료"처럼 보여도, 이 기기/네트워크가
+        // 서버(클라우드)에 전혀 연결되지 못하면(예: 일부 학교 네트워크의
+        // 방화벽이 외부 데이터베이스 주소를 막아둔 경우) 가입 내용이 이
+        // 기기에만 남고 선생님 명단에는 영영 나타나지 않을 수 있습니다 —
+        // 이런 경우를 학생 스스로도, 선생님도 알아챌 방법이 없었던 것이
+        // "가입은 됐는데 명단에 안 보인다" 문제의 핵심 원인입니다. 이 확인은
+        // 기존 재시도/동기화 상태(CLOUD_DIRTY_IDS 등)는 전혀 건드리지 않고,
+        // 오직 이 순간 사용자에게 알려주기 위한 용도로만 사용합니다.
+        if(CLOUD_ENABLED){
+          var verifyPatch = {}; verifyPatch['students/'+id] = STATE.students[id];
+          cloudPush(verifyPatch).then(function(ok){
+            if(!ok){
+              window.alert('⚠ 가입 정보가 서버에 저장되지 못했습니다.\n\n지금 사용 중인 네트워크(학교 와이파이 등)에서 외부 서버 접속이 막혀 있을 수 있습니다. 이 상태로는 선생님 명단에 나타나지 않습니다.\n\n휴대폰 데이터 등 다른 네트워크가 되는 곳에서, 방금 만든 학번과 비밀번호로 다시 한 번 접속해 주세요. 화면 상단의 작은 글씨가 "☁ 동기화됨"으로 바뀌면 정상적으로 선생님 명단에 반영된 것입니다.');
+            }
+          });
+        }
       });
     }
     });
