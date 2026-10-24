@@ -1489,6 +1489,19 @@ function migrateState(state){
   var changed = false;
   if(!state.meta.teachers){ state.meta.teachers = []; changed = true; }
   if(!state.meta.deletedStudentIds){ state.meta.deletedStudentIds = []; changed = true; }
+  // 방어적 정리: deletedStudentIds에는 "실제 5자리 학번" 형태의 값만 들어가야
+  // 합니다. 과거에 입력창(학번 추가/학생 추가 폼)에 학번이 아닌 값(예: 과목명)이
+  // 잘못 입력된 채로 학생이 생성되고, 그 뒤 그 "학생"이 삭제되면서 학번이 아닌
+  // 문자열이 이 목록에 섞여 들어간 적이 있었습니다(예: "개별 탐구 활동"). 그런
+  // 값이 남아있다면 여기서 걸러내고, 걸러낸 결과는 changed=true로 표시해서
+  // 다음 클라우드 전송 때 정리된 목록이 서버에도 반영되게 합니다.
+  var cleanedDeletedIds = state.meta.deletedStudentIds.filter(function(id){
+    return parseStudentIdParts(id) !== null;
+  });
+  if(cleanedDeletedIds.length !== state.meta.deletedStudentIds.length){
+    state.meta.deletedStudentIds = cleanedDeletedIds;
+    changed = true;
+  }
   if(state.meta.region===undefined){ state.meta.region = ''; changed = true; }
   if(state.meta.schoolName===undefined){ state.meta.schoolName = ''; changed = true; }
   Object.keys(state.students||{}).forEach(function(id){
@@ -2968,6 +2981,7 @@ function handleForm(kind, form){
     var name = (fd.get('name')||'').toString().trim();
     var password = (fd.get('password')||'').toString();
     if(!id || !name || !password){ toast('학번, 이름, 비밀번호를 모두 입력하세요.'); return; }
+    if(!parseStudentIdParts(id)){ toast('학번은 숫자 5자리로 입력해주세요. 예: 10305 (1학년 3반 5번)'); return; }
     // Always refresh from the cloud right before deciding "returning student"
     // vs. "first login" for this id. Without this, "we just don't have this
     // student cached on THIS device yet" (a slow sync, or a pull that hasn't
@@ -3092,6 +3106,7 @@ function handleForm(kind, form){
     var sid = (fd.get('studentId')||'').toString().trim();
     var sname = (fd.get('name')||'').toString().trim();
     if(!sid || !sname){ toast('학번과 이름을 입력하세요.'); return; }
+    if(!parseStudentIdParts(sid)){ toast('학번은 숫자 5자리로 입력해주세요. 예: 10305 (1학년 3반 5번)'); return; }
     // Refresh from the cloud before checking for a duplicate. Without this,
     // a student already added (by another teacher, on another computer, or
     // just not yet synced to THIS device) could look "not registered yet"
@@ -3474,6 +3489,7 @@ function addRosterEntries(entries){ // entries: [{id, name}] -> returns array of
   entries.forEach(function(entry){
     var id = entry.id, name = entry.name;
     if(!id || !name) return;
+    if(!parseStudentIdParts(id)) return; // 학번 형식(숫자 5자리)이 아니면 건너뜀 — 과목명 등이 잘못 섞여 들어가는 것을 방지
     if(!STATE.students[id]){ STATE.students[id] = newStudent(id,name); addedIds.push(id); }
   });
   return addedIds;
