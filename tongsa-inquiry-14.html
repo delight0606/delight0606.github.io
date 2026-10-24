@@ -2981,7 +2981,7 @@ function handleForm(kind, form){
     var name = (fd.get('name')||'').toString().trim();
     var password = (fd.get('password')||'').toString();
     if(!id || !name || !password){ toast('학번, 이름, 비밀번호를 모두 입력하세요.'); return; }
-    if(!parseStudentIdParts(id)){ toast('학번은 숫자 5자리로 입력해주세요. 예: 10305 (1학년 3반 5번)'); return; }
+    if(!parseStudentIdParts(id)){ toast('학번은 숫자 5자리로만 입력해주세요. 예: 1학년 3반 5번 → 10305'); return; }
     // Always refresh from the cloud right before deciding "returning student"
     // vs. "first login" for this id. Without this, "we just don't have this
     // student cached on THIS device yet" (a slow sync, or a pull that hasn't
@@ -3106,7 +3106,7 @@ function handleForm(kind, form){
     var sid = (fd.get('studentId')||'').toString().trim();
     var sname = (fd.get('name')||'').toString().trim();
     if(!sid || !sname){ toast('학번과 이름을 입력하세요.'); return; }
-    if(!parseStudentIdParts(sid)){ toast('학번은 숫자 5자리로 입력해주세요. 예: 10305 (1학년 3반 5번)'); return; }
+    if(!parseStudentIdParts(sid)){ toast('학번은 숫자 5자리로만 입력해주세요. 예: 1학년 3반 5번 → 10305'); return; }
     // Refresh from the cloud before checking for a duplicate. Without this,
     // a student already added (by another teacher, on another computer, or
     // just not yet synced to THIS device) could look "not registered yet"
