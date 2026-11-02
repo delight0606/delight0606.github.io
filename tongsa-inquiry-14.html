@@ -1157,14 +1157,38 @@ function cloudFetchJSON(url, opts, timeoutMs){
  *       경우에는 절대 덮어쓰기를 시도하지 않고 그냥 "이번엔 클라우드를
  *       못 읽었을 뿐"으로 안전하게 넘어갑니다.
  */
-function cloudPull(){
-  if(!CLOUD_ENABLED) return Promise.resolve({ok:true, data:null});
+/**
+ * lightweight(true)면 전체 학급 트리(학생 125명분 전체 기록) 대신 meta와
+ * deadlines, 이 두 개의 작은 경로만 따로 받아옵니다. 마감 직전처럼 수십~
+ * 백 명이 동시에 접속해 있는 상황에서, 모든 기기가 7초마다 전체 학생
+ * 데이터를 통째로 내려받으면(startCloudPolling 참고) 인원×접속시간만큼
+ * 반복되어 트래픽이 기하적으로 커지고 Firebase 사용량 한도를 넘거나
+ * 접속 자체가 느려질 수 있습니다. 반면 학생 각자의 화면은 평소에도 자신의
+ * 기록(STATE.students[본인 학번])은 "지금 보고 있는 중"이라 어차피 덮어
+ * 쓰지 않도록 보호되어 있어서(applyCloudSnapshot의 focusedId 처리),
+ * 반복 폴링이 매번 전체 명단을 받아와도 대부분의 학생에게는 실질적인
+ * 이득이 없습니다 — 그래서 가벼운 버전은 아예 students를 받지 않습니다.
+ */
+function cloudPull(lightweight){
+  if(!CLOUD_ENABLED) return Promise.resolve({ok:true, data:null, lightweight:!!lightweight});
+  if(lightweight){
+    return Promise.all([
+      cloudFetchJSON(CLOUD_BASE + '/meta.json', {method:'GET'}, 5000),
+      cloudFetchJSON(CLOUD_BASE + '/deadlines.json', {method:'GET'}, 5000)
+    ]).then(function(results){
+      CLOUD_SYNC.lastOkAt = nowISO(); CLOUD_SYNC.lastError = null;
+      return {ok:true, data:{meta:results[0], deadlines:results[1]}, lightweight:true};
+    }).catch(function(err){
+      CLOUD_SYNC.lastError = String((err && err.message) || err);
+      return {ok:false, data:null, lightweight:true};
+    });
+  }
   return cloudFetchJSON(cloudUrl(), {method:'GET'}, 5000).then(function(data){
     CLOUD_SYNC.lastOkAt = nowISO(); CLOUD_SYNC.lastError = null;
-    return {ok:true, data:data};
+    return {ok:true, data:data, lightweight:false};
   }).catch(function(err){
     CLOUD_SYNC.lastError = String((err && err.message) || err);
-    return {ok:false, data:null};
+    return {ok:false, data:null, lightweight:false};
   });
 }
 
@@ -1317,7 +1341,7 @@ function flushCloudPush(){
  *     클라우드 값을 그대로 반영합니다(다른 컴퓨터에서 쌓인 데이터를
  *     가져오는 것이 이 기능의 목적이므로).
  */
-function applyCloudSnapshot(cloud){
+function applyCloudSnapshot(cloud, lightweight){
   if(!cloud || typeof cloud !== 'object' || !STATE) return false;
   // A full-tree PUT (init-time cloud seeding, or a backup restore) is still
   // queued or in-flight for THIS device -- its payload already reflects
@@ -1348,6 +1372,13 @@ function applyCloudSnapshot(cloud){
       changed = true;
     }
   }
+  // 가벼운 pull(meta/deadlines만 받아온 경우)은 여기서 멈춥니다. cloud.students가
+  // 없는 건 "학생이 0명"이 아니라 "이번엔 안 받아왔다"는 뜻이므로, 아래의
+  // 학생 트리 비교·"클라우드에 없는 로컬 학생 재전송" 로직을 그대로
+  // 돌리면 로컬에 있는 모든 학생을 "클라우드에 없다"고 오판해서 매번 다시
+  // 밀어 올리는(재전송) 사고로 이어집니다. 전체 학생 트리는 무거운(완전한)
+  // pull에서만 다룹니다.
+  if(lightweight) return changed;
   var focusedId = VIEW.studentId;
   var cloudStudents = cloud.students || {};
   // 교사가 삭제한 학번 목록(tombstone) — 클라우드의 meta를 우선 쓰고(가장
@@ -1415,12 +1446,12 @@ function applyCloudSnapshot(cloud){
  *     마치고 다음 화면으로 넘어갈 때 자연스럽게 반영되도록 렌더링을 통째로
  *     미룹니다.
  */
-function pullFromCloud(){
+function pullFromCloud(lightweight){
   if(!CLOUD_ENABLED || !STATE || CLOUD_SYNC.syncing) return Promise.resolve();
   CLOUD_SYNC.syncing = true;
-  return cloudPull().then(function(pullResult){
+  return cloudPull(lightweight).then(function(pullResult){
     CLOUD_SYNC.syncing = false;
-    var changed = applyCloudSnapshot(pullResult.data);
+    var changed = applyCloudSnapshot(pullResult.data, pullResult.lightweight);
     if(changed){
       dbSet('state', STATE);
       var modalOpen = document.querySelector('.modal-backdrop, .celebrate-backdrop');
@@ -1437,7 +1468,14 @@ function startCloudPolling(){
   clearInterval(CLOUD_POLL_TIMER);
   CLOUD_POLL_TIMER = setInterval(function(){
     if(document.hidden) return;
-    pullFromCloud();
+    // 반복 폴링(7초마다)은 교사 화면일 때만 전체 학생 명단까지 받아옵니다.
+    // 교사는 몇 명 안 되니 전체를 받아도 부담이 없고, 제출 현황을 실시간
+    // 으로 보는 데 필요합니다. 반면 학생은 수십~백 명이 동시에 접속할 수
+    // 있는 쪽이라, 반복 폴링에서는 meta/deadlines(마감 기한 등)만 가볍게
+    // 받아옵니다 — 자기 자신의 제출 기록은 화면에 열려 있는 동안 어차피
+    // 덮어쓰지 않도록 보호되어 있어 전체를 매번 받아올 필요가 없고, 다른
+    // 학생들의 기록은 원래부터 필요 없습니다.
+    pullFromCloud(VIEW.role !== 'teacher');
   }, CLOUD_POLL_MS);
   document.addEventListener('visibilitychange', function(){
     if(!document.hidden) pullFromCloud();
