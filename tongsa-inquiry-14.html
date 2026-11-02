@@ -1101,9 +1101,10 @@ var CLOUD_BASE = CLOUD_DB_URL + '/classes/' + CLOUD_CLASS_CODE;
 var CLOUD_ENABLED = !!(CLOUD_DB_URL && CLOUD_CLASS_CODE);
 var CLOUD_SYNC = { lastOkAt: null, lastError: null, syncing: false };
 var CLOUD_PUSH_TIMER = null;
-var CLOUD_PENDING = { meta: false, ids: {}, full: false };
+var CLOUD_PENDING = { meta: false, deadlines: false, ids: {}, full: false };
 var CLOUD_DIRTY_IDS = {}; // ids currently queued or in-flight for push — never overwritten by an incoming pull
-var CLOUD_META_DIRTY = false; // meta/deadlines currently queued or in-flight for push — same protection as CLOUD_DIRTY_IDS, but for meta
+var CLOUD_META_DIRTY = false; // meta(학교/반/과목/교사명단/비밀번호) 전용으로 현재 전송 대기/전송 중 — CLOUD_DIRTY_IDS와 같은 보호를, meta 하나에만 적용
+var CLOUD_DEADLINES_DIRTY = false; // deadlines 전용으로 현재 전송 대기/전송 중 — meta와 완전히 분리된 보호. (과거에는 meta와 deadlines를 항상 같이 묶어서 보내서, 교사 로그인처럼 deadlines와 무관한 meta 저장이 이 기기에 캐시된 "옛 deadlines" 값까지 같이 실어 보내 다른 기기가 방금 고친 마감 기한을 되돌려버리는 사고가 있었음 — 지금은 meta/deadlines를 서로 독립적으로 추적·전송함)
 var CLOUD_FULL_PUSH_DIRTY = false; // a full-tree PUT (init-time seed, or backup restore) is queued or in-flight — while true, NOTHING from an incoming pull should be merged in, or it could partially overwrite what we're in the middle of pushing
 var CLOUD_POLL_TIMER = null;
 var CLOUD_POLL_MS = 7000;
@@ -1228,12 +1229,15 @@ function scheduleCloudPush(hint){
     else hint = {type:'meta'};
   }
   if(hint.type==='full'){
-    CLOUD_PENDING = {meta:false, ids:{}, full:true};
+    CLOUD_PENDING = {meta:false, deadlines:false, ids:{}, full:true};
     CLOUD_FULL_PUSH_DIRTY = true;
   } else if(!CLOUD_PENDING.full){
     if(hint.type==='meta'){
       CLOUD_PENDING.meta = true;
       CLOUD_META_DIRTY = true;
+    } else if(hint.type==='deadlines'){
+      CLOUD_PENDING.deadlines = true;
+      CLOUD_DEADLINES_DIRTY = true;
     } else if(hint.type==='student' && hint.id){
       CLOUD_PENDING.ids[hint.id] = true;
       CLOUD_DIRTY_IDS[hint.id] = true;
@@ -1248,7 +1252,7 @@ function scheduleCloudPush(hint){
 function flushCloudPush(){
   if(!CLOUD_ENABLED || !STATE) return;
   var pending = CLOUD_PENDING;
-  CLOUD_PENDING = {meta:false, ids:{}, full:false};
+  CLOUD_PENDING = {meta:false, deadlines:false, ids:{}, full:false};
   if(pending.full){
     cloudPushFull(STATE).then(function(ok){
       if(ok){ CLOUD_DIRTY_IDS = {}; CLOUD_FULL_PUSH_DIRTY = false; }
@@ -1268,7 +1272,12 @@ function flushCloudPush(){
   var idsToSend = Object.keys(pending.ids);
   var patch = {};
   var any = false;
-  if(pending.meta){ patch.meta = STATE.meta; patch.deadlines = STATE.deadlines; any = true; }
+  // meta와 deadlines는 서로 완전히 독립적으로만 patch에 실립니다 — 둘 중
+  // 하나만 바뀌었을 때 바뀌지 않은 쪽까지 "이 기기가 기억하는 값"으로 같이
+  // 덮어써버리는 사고(교사 로그인이 옛 마감 기한을 되돌리거나, 기한 저장이
+  // 이 기기에 없던 다른 선생님 명단을 지워버리는 등)를 막기 위함입니다.
+  if(pending.meta){ patch.meta = STATE.meta; any = true; }
+  if(pending.deadlines){ patch.deadlines = STATE.deadlines; any = true; }
   idsToSend.forEach(function(id){
     if(STATE.students[id]){
       STATE.students[id].updatedAt = nowISO();
@@ -1281,15 +1290,18 @@ function flushCloudPush(){
     if(ok){
       idsToSend.forEach(function(id){ delete CLOUD_DIRTY_IDS[id]; });
       if(pending.meta) CLOUD_META_DIRTY = false;
+      if(pending.deadlines) CLOUD_DEADLINES_DIRTY = false;
     } else {
-      // IMPORTANT: do NOT clear CLOUD_DIRTY_IDS/CLOUD_META_DIRTY here. The
-      // push failed, so the cloud still has the OLD version of these --
-      // clearing the dirty flag would let the next poll's (stale) pull
-      // silently overwrite the local edit we just tried (and failed) to
-      // send, reverting it without any warning. Keep them dirty and re-queue
-      // so a transient failure self-heals once the connection recovers,
-      // instead of either losing the edit or leaving it stuck dirty forever.
+      // IMPORTANT: do NOT clear CLOUD_DIRTY_IDS/CLOUD_META_DIRTY/
+      // CLOUD_DEADLINES_DIRTY here. The push failed, so the cloud still has
+      // the OLD version of these -- clearing the dirty flag would let the
+      // next poll's (stale) pull silently overwrite the local edit we just
+      // tried (and failed) to send, reverting it without any warning. Keep
+      // them dirty and re-queue so a transient failure self-heals once the
+      // connection recovers, instead of either losing the edit or leaving it
+      // stuck dirty forever.
       if(pending.meta) scheduleCloudPush({type:'meta'});
+      if(pending.deadlines) scheduleCloudPush({type:'deadlines'});
       if(idsToSend.length) scheduleCloudPush({type:'students', ids: idsToSend});
     }
   });
@@ -1316,15 +1328,23 @@ function applyCloudSnapshot(cloud){
   if(CLOUD_FULL_PUSH_DIRTY) return false;
   var changed = false;
   var skipMeta = (VIEW.screen === 'teacherSetup') || CLOUD_META_DIRTY; // 학교/학급 정보를 막 수정 중이거나(화면) 아직 전송 중/전송 예정(CLOUD_META_DIRTY)이면 건드리지 않음
+  var skipDeadlines = CLOUD_DEADLINES_DIRTY; // 마감 기한을 막 전송 중/전송 예정이면 건드리지 않음 — meta와 독립적으로 보호
   // 실제로 값이 달라졌을 때만 changed를 true로 표시합니다 — 그래야 7초마다
   // 도는 폴링이 "아무 변화도 없는데" 매번 화면을 다시 그려서, 마침 누군가
   // 입력 중이던 화면의 포커스/커서 위치를 흔드는 일을 막을 수 있습니다.
+  // meta와 deadlines는 서로 독립적으로 비교·반영합니다 — 한쪽만 로컬에서
+  // 막 전송 중이어도 다른 쪽은 클라우드의 최신 값을 정상적으로 받아야 하므로.
   if(!skipMeta && cloud.meta){
-    var metaStr = JSON.stringify([cloud.meta, cloud.deadlines||null]);
-    if(metaStr !== JSON.stringify([STATE.meta, STATE.deadlines||null])){
+    if(JSON.stringify(cloud.meta) !== JSON.stringify(STATE.meta)){
       STATE.meta = cloud.meta;
       if(!STATE.meta.teachers) STATE.meta.teachers = [];
-      STATE.deadlines = cloud.deadlines || STATE.deadlines || {stage1:null, research:null, final:null};
+      changed = true;
+    }
+  }
+  if(!skipDeadlines){
+    var newDeadlines = cloud.deadlines || STATE.deadlines || {stage1:null, research:null, final:null};
+    if(JSON.stringify(newDeadlines) !== JSON.stringify(STATE.deadlines||null)){
+      STATE.deadlines = newDeadlines;
       changed = true;
     }
   }
@@ -1516,6 +1536,16 @@ function migrateState(state){
   }
   if(state.meta.region===undefined){ state.meta.region = ''; changed = true; }
   if(state.meta.schoolName===undefined){ state.meta.schoolName = ''; changed = true; }
+  // 방어적 정리: 학생 명단(state.students)의 키도 "실제 5자리 학번" 형태만
+  // 들어있어야 합니다. 위 deletedStudentIds와 같은 과거 버전의 문제로, 학번이
+  // 아닌 값(학생 이름, 과목명 등)이 학생 키로 통째로 잘못 들어간 적이
+  // 있었습니다(예: "신현지", "개별 탐구 활동"). 지금의 모든 학생 생성
+  // 경로(student-login/add-student/addRosterEntries)는 생성 전에 학번
+  // 형식을 검증하므로 더는 새로 생기지 않지만, 과거에 이미 들어간 값은
+  // 여기서 찾아 제거합니다.
+  Object.keys(state.students||{}).forEach(function(id){
+    if(!parseStudentIdParts(id)){ delete state.students[id]; changed = true; }
+  });
   Object.keys(state.students||{}).forEach(function(id){
     var s0 = state.students[id];
     if(s0.passwordHash===undefined){ s0.passwordHash = null; changed = true; }
@@ -2913,8 +2943,20 @@ function handleAction(action, el){
       pullFromCloud();
       break;
     case 'enter-teacher':
-      VIEW.screen = STATE.meta.teacherPasscode ? 'teacherAuth' : 'teacherSetup';
-      render(); break;
+      // 이 기기가 아직 최신 클라우드 상태를 못 받아왔다면(특히 오랫동안 안
+      // 연 기기이거나 처음 여는 기기), 비밀번호가 로컬 캐시에 없다는 이유만
+      // 으로 "학급 최초 설정" 화면으로 잘못 보내질 수 있습니다. 이미 다른
+      // 선생님이 설정을 끝낸 학급인데 이 화면에서 다시 "설정 완료"를 누르면
+      // 기존 학급 전체(교사 명단·반 정보 등)가 통째로 새 값으로 덮어써지는
+      // 사고로 이어집니다. 그래서 화면을 정하기 전에 먼저 클라우드에서
+      // 최신 상태를 받아옵니다(네트워크가 없거나 느리면 최대 5초 정도 걸릴
+      // 수 있지만, 실패해도 조용히 로컬 상태로 진행되어 오프라인에서도 계속
+      // 동작합니다).
+      pullFromCloud().then(function(){
+        VIEW.screen = STATE.meta.teacherPasscode ? 'teacherAuth' : 'teacherSetup';
+        render();
+      });
+      break;
     case 'forgot-teacher-passcode':
       doForgotTeacherPasscode(); break;
     case 'back-to-dashboard':
@@ -3087,19 +3129,27 @@ function handleForm(kind, form){
     var pass = (fd.get('passcode')||'').toString();
     var tname = (fd.get('teacherName')||'').toString().trim();
     if(!tname){ toast('교사 이름을 입력하세요.'); return; }
-    if(pass !== STATE.meta.teacherPasscode){ toast('비밀번호가 올바르지 않습니다.'); return; }
-    if(!STATE.meta.teachers) STATE.meta.teachers = [];
-    if(STATE.meta.teachers.indexOf(tname)===-1){
-      if(STATE.meta.teachers.length >= MAX_TEACHERS_HINT){
-        var proceed = window.confirm('이미 '+MAX_TEACHERS_HINT+'명의 교사('+STATE.meta.teachers.join(', ')+')가 이 학급에 등록되어 있습니다. 그래도 "'+tname+'"(으)로 계속하시겠습니까?');
-        if(!proceed) return;
+    // 로그인하는 이 기기의 로컬 캐시가 오래됐을 수 있습니다(다른 선생님이
+    // 다른 기기에서 비밀번호를 바꿨거나 교사 명단에 새로 추가됐는데, 이
+    // 기기는 아직 그걸 못 받아온 상태). 그 상태에서 바로 이름을 추가해
+    // 저장하면, 이 기기가 모르고 있던 다른 선생님들이 통째로 지워지는
+    // 사고로 이어집니다(add-student가 중복 확인 전에 pull하는 것과 같은
+    // 이유) — 그래서 교사 명단을 건드리기 전에 먼저 클라우드 최신 상태를
+    // 받아옵니다.
+    pullFromCloud().then(function(){
+      if(pass !== STATE.meta.teacherPasscode){ toast('비밀번호가 올바르지 않습니다.'); return; }
+      if(!STATE.meta.teachers) STATE.meta.teachers = [];
+      if(STATE.meta.teachers.indexOf(tname)===-1){
+        if(STATE.meta.teachers.length >= MAX_TEACHERS_HINT){
+          var proceed = window.confirm('이미 '+MAX_TEACHERS_HINT+'명의 교사('+STATE.meta.teachers.join(', ')+')가 이 학급에 등록되어 있습니다. 그래도 "'+tname+'"(으)로 계속하시겠습니까?');
+          if(!proceed) return;
+        }
+        STATE.meta.teachers.push(tname);
       }
-      STATE.meta.teachers.push(tname);
-    }
-    VIEW.teacherAuthed = true; VIEW.role='teacher'; VIEW.teacherName = tname; VIEW.screen='teacherDashboard';
-    DRAFTS.passcodeAttempt=''; DRAFTS.teacherNameAttempt='';
-    saveState(true).then(render);
-    pullFromCloud();
+      VIEW.teacherAuthed = true; VIEW.role='teacher'; VIEW.teacherName = tname; VIEW.screen='teacherDashboard';
+      DRAFTS.passcodeAttempt=''; DRAFTS.teacherNameAttempt='';
+      saveState(true, {type:'meta'}).then(render);
+    });
   } else if(kind==='teacher-setup'){
     var region = (fd.get('region')||'').toString().trim();
     var schoolName = (fd.get('schoolName')||'').toString().trim();
@@ -3107,28 +3157,40 @@ function handleForm(kind, form){
     var className = (fd.get('className')||'').toString().trim();
     var passcode = (fd.get('passcode')||'').toString();
     var isFirstTime = !STATE.meta.teacherPasscode;
-    if(isFirstTime){
-      var setupName = (fd.get('teacherName')||'').toString().trim();
-      if(!setupName){ toast('담당 교사 이름을 입력하세요.'); return; }
-      if(!STATE.meta.teachers) STATE.meta.teachers = [];
-      if(STATE.meta.teachers.indexOf(setupName)===-1) STATE.meta.teachers.push(setupName);
-      VIEW.teacherName = setupName;
-    }
-    STATE.meta.region = region;
-    STATE.meta.schoolName = schoolName;
-    STATE.meta.subjectName = subjectName;
-    STATE.meta.className = className;
-    if(passcode) STATE.meta.teacherPasscode = passcode;
-    else if(isFirstTime){ toast('비밀번호를 설정하세요.'); return; }
-    VIEW.teacherAuthed = true; VIEW.role='teacher'; VIEW.screen='teacherDashboard';
-    saveState(true).then(function(){ render(); toast('저장되었습니다.'); });
+    // "학급 정보 수정"(edit-subject)으로 들어온 경우는 이미 설정된 학급을
+    // 고치는 중이라, 이 기기에 캐시된 교사 명단 등이 오래됐을 수 있습니다.
+    // 여기서 저장하면 STATE.meta 전체가 그대로 클라우드에 실려 나가므로
+    // (teacher-auth와 같은 이유), 먼저 최신 상태를 받아온 뒤에 입력한
+    // 필드만 바꿔서 저장합니다. 최초 설정(isFirstTime)일 때는 클라우드가
+    // 어차피 비어 있을 상황이라 pull이 의미가 없어 건너뜁니다.
+    var prep = isFirstTime ? Promise.resolve() : pullFromCloud();
+    prep.then(function(){
+      if(isFirstTime){
+        var setupName = (fd.get('teacherName')||'').toString().trim();
+        if(!setupName){ toast('담당 교사 이름을 입력하세요.'); return; }
+        if(!STATE.meta.teachers) STATE.meta.teachers = [];
+        if(STATE.meta.teachers.indexOf(setupName)===-1) STATE.meta.teachers.push(setupName);
+        VIEW.teacherName = setupName;
+      }
+      STATE.meta.region = region;
+      STATE.meta.schoolName = schoolName;
+      STATE.meta.subjectName = subjectName;
+      STATE.meta.className = className;
+      if(passcode) STATE.meta.teacherPasscode = passcode;
+      else if(isFirstTime){ toast('비밀번호를 설정하세요.'); return; }
+      VIEW.teacherAuthed = true; VIEW.role='teacher'; VIEW.screen='teacherDashboard';
+      saveState(true, {type:'meta'}).then(function(){ render(); toast('저장되었습니다.'); });
+    });
   } else if(kind==='deadlines'){
     STAGE_ORDER.forEach(function(st){
       var v = form.querySelector('[data-deadline-stage="'+st+'"]').value;
       STATE.deadlines[st] = fromDatetimeLocalValue(v);
     });
     DRAFTS.deadlineInputs = {};
-    saveState(true).then(function(){ render(); toast('기한이 저장되었습니다.'); });
+    // deadlines만 보냅니다(meta는 건드리지 않음) — 이 기기에 캐시된 학교/반/
+    // 교사 명단이 오래됐더라도, 기한만 저장할 때는 그게 같이 실려 나가
+    // 다른 선생님이 추가한 정보를 지워버리는 일이 없도록.
+    saveState(true, {type:'deadlines'}).then(function(){ render(); toast('기한이 저장되었습니다.'); });
   } else if(kind==='add-student'){
     var sid = (fd.get('studentId')||'').toString().trim();
     var sname = (fd.get('name')||'').toString().trim();
