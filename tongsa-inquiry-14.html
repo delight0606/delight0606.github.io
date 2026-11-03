@@ -3887,6 +3887,7 @@ function handleForm(kind, form){
         toast('서버와 연결이 원활하지 않아 중복 등록 여부를 확인할 수 없습니다. 네트워크 연결을 확인하고 잠시 후 다시 시도해주세요.');
         return;
       }
+      reviveFromTombstone(sid);
       STATE.students[sid] = newStudent(sid, sname);
       DRAFTS.newStudentId=''; DRAFTS.newStudentName='';
       saveState(true, {type:'student', id: sid}).then(function(){ render(); toast('학생이 추가되었습니다.'); });
@@ -4293,6 +4294,32 @@ function hardDeleteStudent(studentId, silent){
 }
 
 /**
+ * 완전 삭제된(hardDeleteStudent로 meta.deletedStudentIds에 올라간) 학번을
+ * 교사가 나중에 "같은 학번"으로 다시 등록하려 할 때 반드시 호출해야 합니다.
+ *
+ * 버그였던 상황: deletedStudentIds는 "다른 기기가 들고 있던 옛 로컬 기록을
+ * 되살리지 못하게" 영구히 남아있는 목록인데(바로 위 hardDeleteStudent 설명
+ * 참고), add-student/엑셀 일괄 추가는 이 목록을 전혀 건드리지 않았습니다.
+ * 그래서 같은 학번을 다시 추가하면: (1) 로컬에 새 학생이 생기고 (2) "추가
+ * 되었습니다" 토스트도 뜨고 (3) 클라우드에도 정상적으로 전송되지만, (4) 바로
+ * 다음 전체 pull(교사 대시보드는 몇 초마다 폴링합니다) 때 applyCloudSnapshot의
+ * "삭제된 학번은 로컬에서도 지운다" 로직이 돌면서, meta.deletedStudentIds에
+ * 여전히 남아있는 그 학번을 "아직도 삭제돼야 할 학번"으로 오인해 방금 다시
+ * 추가한 학생을 또 지워버렸습니다 — 교사 입장에서는 "추가했다는 안내는
+ * 뜨는데 명단에 반영이 안 된다"로 보였습니다.
+ *
+ * 그래서 이 학번으로 새로 학생을 만들기 직전에, 이 목록에서 그 학번을 먼저
+ * 빼고(이제부터는 "삭제된 적 없는, 정상 등록된 학번"으로 취급) 그 변경을
+ * meta 전송 대상으로 표시해 클라우드와 다른 기기에도 반영합니다.
+ */
+function reviveFromTombstone(id){
+  if(STATE.meta.deletedStudentIds && STATE.meta.deletedStudentIds.indexOf(id) !== -1){
+    STATE.meta.deletedStudentIds = STATE.meta.deletedStudentIds.filter(function(x){ return x !== id; });
+    scheduleCloudPush({type:'meta'});
+  }
+}
+
+/**
  * 관리자(교사) 전용 일괄 비밀번호 초기화. 학급 공용 기기를 여러 반이 함께
  * 쓰다 보면 특정 학생 하나가 아니라 전체를 한 번에 초기화해야 할 때가 있어
  * (예: 비밀번호 유출 의심 등 보안 사고 대응) 만든 기능입니다. 이미 교사
@@ -4352,7 +4379,7 @@ function addRosterEntries(entries){ // entries: [{id, name}] -> returns array of
     var id = entry.id, name = entry.name;
     if(!id || !name) return;
     if(!parseStudentIdParts(id)) return; // 학번 형식(숫자 5자리)이 아니면 건너뜀 — 과목명 등이 잘못 섞여 들어가는 것을 방지
-    if(!STATE.students[id]){ STATE.students[id] = newStudent(id,name); addedIds.push(id); }
+    if(!STATE.students[id]){ reviveFromTombstone(id); STATE.students[id] = newStudent(id,name); addedIds.push(id); }
   });
   return addedIds;
 }
