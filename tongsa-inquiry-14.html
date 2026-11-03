@@ -2221,6 +2221,26 @@ function statusChip(status, extra){
   return '<span class="chip '+m.cls+'"><span class="dot"></span>'+escapeHtml(label)+'</span>';
 }
 
+/**
+ * 어떤 학생의 특정 단계(stage1/research/final)에 대한 "가장 최근 제출"이
+ * 기한을 넘겨서 이루어졌는지 여부. timeline은 항상 발생한 순서대로 push()만
+ * 되므로(재정렬 없음) 마지막 submission 항목이 곧 가장 최근 제출입니다.
+ * 아직 한 번도 제출하지 않았다면(= 기한이 지났어도 아직 미제출) false —
+ * "지각 제출"과 "아직 미제출"은 다른 의미이므로 구분합니다.
+ */
+function isStageLate(student, stage){
+  var subs = (student.timeline||[]).filter(function(e){ return e.stage===stage && e.type==='submission'; });
+  if(!subs.length) return false;
+  return !!subs[subs.length-1].late;
+}
+
+function lateBadge(student, stage){
+  var status = student.stageStatus[stage];
+  if(status!=='submitted' && status!=='approved') return '';
+  if(!isStageLate(student, stage)) return '';
+  return ' <span class="chip st-late" style="margin-left:4px;"><span class="dot"></span>지각</span>';
+}
+
 function fileChip(f){
   var isImg = f.mime && f.mime.indexOf('image/')===0;
   // 이 기기에 실제 파일 내용(dataUrl)이 아직 없는 경우 — 다른 기기에서 올린
@@ -2579,10 +2599,7 @@ function screenTeacherDashboard(){
     var s = STATE.students[id];
     var cells = STAGE_ORDER.map(function(st){
       var status = s.stageStatus[st];
-      if(st==='final' && status==='submitted' && !s.presentationEligible){
-        return '<td>'+statusChip('submitted',{label:'제출(기한초과)'})+'</td>';
-      }
-      return '<td>'+statusChip(status)+'</td>';
+      return '<td>'+statusChip(status)+lateBadge(s, st)+'</td>';
     }).join('');
     return '<tr class="clickable" data-action="open-student" data-id="'+escapeHtml(id)+'">' +
       '<td class="mono">'+escapeHtml(id)+'</td><td>'+escapeHtml(s.name)+'</td>'+cells+
@@ -3944,7 +3961,11 @@ function doSubmitStage(stage){
     if(!reallySubmit) return;
   }
   var deadline = STATE.deadlines[stage];
-  var late = stage==='final' ? isPast(deadline) : false;
+  // 예전에는 "지각" 여부를 최종 결과물 제출에만 적용했습니다(발표 대상 여부에
+  // 영향을 주니까요). 이제는 1단계(주제 선정)·2단계(탐구 진행)도 기한을 넘겨
+  // 제출하면 이 entry.late가 true로 남아서, 학생 명단 표의 지각 표시와 학생
+  // 상세 화면의 "기한 초과" 칩(renderStageEntries 참고)에 똑같이 반영됩니다.
+  var late = isPast(deadline);
   var entry = {
     id: uid(), stage: stage, type:'submission', author:'student', authorName: student.name,
     ts: nowISO(), mainText: draft.mainText.trim(), items: items, tools: tools, late: late, threadRoot: null
