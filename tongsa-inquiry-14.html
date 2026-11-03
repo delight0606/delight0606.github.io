@@ -1235,6 +1235,130 @@ function cloudDeletePath(path){
   });
 }
 
+/* ============================== 첨부 파일(무거운 데이터) 분리 저장 ==============================
+ * 배경: 학생이 올리는 사진 등 첨부 파일은 base64 문자열(dataUrl)로 인코딩되는데,
+ * 이게 기존에는 그 학생 기록(students/$id) 안에 그대로 끼워져 저장되었습니다.
+ * 문제는 이 학생 데이터 전체가 7초마다 도는 일반 동기화(폴링)로 반복해서
+ * 통째로 다시 내려받아지는 대상이라는 점입니다 — 즉 사진 한 장을 한 번
+ * 올리면, 그 뒤로 이 페이지를 열어둔 모든 사람의 모든 기기가 몇 초마다
+ * 그 사진을 포함한 전체 데이터를 계속 다시 받아오게 되어, 실제 저장 용량
+ * (수십 MB)에 비해 다운로드량이 수백~수천 배로 불어나는 일이 있었습니다
+ * (실제로 실 저장 데이터는 50MB 남짓인데 한 달 다운로드량이 275GB에 달해
+ * Firebase 무료 할당량을 초과하고 실제 비용까지 청구된 사례로 확인됨).
+ *
+ * 해결: 첨부 파일의 실제 내용(dataUrl)은 완전히 별도의 "파일 보관소" 경로
+ * (fileBlobs/학급코드/학번/파일ID)에만 저장하고, 평소 동기화되는
+ * students/$id 쪽에는 파일 내용 대신 이름·용량·형식과 참조용 fileId만
+ * 남깁니다. 그 파일의 실제 내용이 필요한 순간(화면에서 "불러오기"를
+ * 누르거나, 종합 보고서를 만들 때)에만 그 파일 하나만 따로 받아옵니다.
+ */
+function cloudFileBlobUrl(studentId, fileId){
+  return CLOUD_DB_URL + '/fileBlobs/' + CLOUD_CLASS_CODE + '/' + encodeURIComponent(studentId) + '/' + encodeURIComponent(fileId) + '.json';
+}
+function cloudPushFileBlob(studentId, fileId, dataUrl){
+  if(!CLOUD_ENABLED) return Promise.resolve(false);
+  return cloudFetchJSON(cloudFileBlobUrl(studentId, fileId), {
+    method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify(dataUrl)
+  }, 20000).then(function(){ return true; }).catch(function(){ return false; });
+}
+function cloudFetchFileBlob(studentId, fileId){
+  if(!CLOUD_ENABLED) return Promise.resolve(null);
+  return cloudFetchJSON(cloudFileBlobUrl(studentId, fileId), {method:'GET'}, 20000).catch(function(){ return null; });
+}
+// 파일 보관소 전송은 실패해도(네트워크 일시 문제 등) 이 기기의 로컬
+// 저장본은 그대로 안전하니, 몇 차례 간격을 두고 조용히 재시도만 합니다.
+function pushFileBlobWithRetry(studentId, fileId, dataUrl, attemptsLeft){
+  if(attemptsLeft === undefined) attemptsLeft = 3;
+  cloudPushFileBlob(studentId, fileId, dataUrl).then(function(ok){
+    if(!ok && attemptsLeft > 1){
+      setTimeout(function(){ pushFileBlobWithRetry(studentId, fileId, dataUrl, attemptsLeft - 1); }, 4000);
+    }
+  });
+}
+// student 객체 안의 모든 첨부 파일(제출된 timeline과 아직 제출 전인 draft
+// 양쪽 다)을 하나씩 찾아 fn(fileObj)를 호출합니다 — 파일 위치가 여러 군데에
+// 흩어져 있어서, 파일을 다루는 모든 기능(전송용 정리, 복구용 조회, id 부여
+// 등)이 이 하나의 순회 로직을 함께 씁니다.
+function forEachFileInStudent(student, fn){
+  if(!student) return;
+  (student.timeline||[]).forEach(function(entry){
+    (entry.items||[]).forEach(function(item){ (item.files||[]).forEach(fn); });
+  });
+  var draft = student.draft || {};
+  Object.keys(draft).forEach(function(stage){
+    ((draft[stage]||{}).items||[]).forEach(function(item){ (item.files||[]).forEach(fn); });
+  });
+}
+// 아직 fileId가 없는(예전 버전에서 만들어졌거나, 아직 분리 저장되지 않은)
+// 첨부 파일을 찾아 fileId를 새로 부여하고, 그 파일 보관소 전송을 예약합니다.
+// STATE를 실제로 바꾸므로(=마이그레이션), 이후 이 학생 레코드가 클라우드로
+// 나갈 때마다 자동으로 "아직 안 옮겨진 예전 첨부파일"이 하나씩 분리되어
+// 나갑니다 — 한 번에 전체를 옮기는 별도 작업 없이, 평소 쓰이는 흐름 속에서
+// 자연스럽게 점진적으로 마이그레이션됩니다.
+function ensureFileIds(studentId, student){
+  var newlyAssigned = [];
+  forEachFileInStudent(student, function(f){
+    if(f && f.dataUrl && !f.fileId){
+      f.fileId = uid();
+      newlyAssigned.push({fileId:f.fileId, dataUrl:f.dataUrl});
+    }
+  });
+  if(newlyAssigned.length){
+    newlyAssigned.forEach(function(nf){ pushFileBlobWithRetry(studentId, nf.fileId, nf.dataUrl); });
+    try{ dbSet('state', STATE); }catch(e){}
+  }
+  return newlyAssigned.length > 0;
+}
+// 클라우드로 내보낼 때만 쓰는 "가벼운 사본"을 만듭니다 — 원본(STATE) 안의
+// dataUrl은 절대 건드리지 않고(이 기기에서 계속 바로 보여줘야 하므로),
+// 복사본에서만 모든 첨부파일의 dataUrl을 제거합니다.
+function studentForCloud(studentId, student){
+  ensureFileIds(studentId, student);
+  var copy = JSON.parse(JSON.stringify(student));
+  forEachFileInStudent(copy, function(f){ if(f && f.dataUrl){ delete f.dataUrl; } });
+  return copy;
+}
+function stateForCloudFull(state){
+  Object.keys(state.students||{}).forEach(function(id){ ensureFileIds(id, state.students[id]); });
+  var copy = JSON.parse(JSON.stringify(state));
+  Object.keys(copy.students||{}).forEach(function(id){
+    forEachFileInStudent(copy.students[id], function(f){ if(f && f.dataUrl){ delete f.dataUrl; } });
+  });
+  return copy;
+}
+// 클라우드에서 막 받아온 학생 데이터(cloudStudent, 첨부파일 dataUrl 없음)에
+// 이 기기가 이미 갖고 있는 첨부파일 내용을 다시 채워 넣습니다 — 안 그러면
+// 폴링이 돌 때마다 방금 올렸거나 전에 "불러오기"로 받아둔 사진이 화면에서
+// 사라져버립니다. cloudStudent를 그 자리에서 바로 수정해서 반환합니다.
+function mergeStudentPreservingLocalFiles(localStudent, cloudStudent){
+  if(!localStudent || !cloudStudent) return cloudStudent;
+  var localDataByFileId = {};
+  forEachFileInStudent(localStudent, function(f){ if(f && f.fileId && f.dataUrl) localDataByFileId[f.fileId] = f.dataUrl; });
+  if(Object.keys(localDataByFileId).length){
+    forEachFileInStudent(cloudStudent, function(f){
+      if(f && f.fileId && !f.dataUrl && localDataByFileId[f.fileId]) f.dataUrl = localDataByFileId[f.fileId];
+    });
+  }
+  return cloudStudent;
+}
+// 이 기기에 아직 실제 내용이 없는(다른 기기에서 올라온) 첨부 파일을 화면에
+// 보여주거나 보고서에 넣어야 할 때, 그 순간에만 파일 보관소에서 받아오고
+// 이 기기에도 캐시해 둡니다(다음에는 다시 안 받아오도록).
+function resolveFileDataUrl(studentId, fileId){
+  var student = STATE.students[studentId];
+  var found = null;
+  if(student) forEachFileInStudent(student, function(f){ if(f && f.fileId===fileId && f.dataUrl) found = f; });
+  if(found) return Promise.resolve(found.dataUrl);
+  if(!CLOUD_ENABLED) return Promise.resolve(null);
+  return cloudFetchFileBlob(studentId, fileId).then(function(dataUrl){
+    if(dataUrl && student){
+      forEachFileInStudent(student, function(f){ if(f && f.fileId===fileId){ f.dataUrl = dataUrl; } });
+      dbSet('state', STATE);
+    }
+    return dataUrl;
+  });
+}
+
 /**
  * saveState()가 호출될 때마다(=STATE가 바뀔 때마다) 무엇을 클라우드에 올릴지
  * "예약"합니다. 실제 전송은 400ms 동안 추가 호출을 모아서(debounce) 한 번에
@@ -1279,7 +1403,7 @@ function flushCloudPush(){
   var pending = CLOUD_PENDING;
   CLOUD_PENDING = {meta:false, deadlines:false, ids:{}, full:false};
   if(pending.full){
-    cloudPushFull(STATE).then(function(ok){
+    cloudPushFull(stateForCloudFull(STATE)).then(function(ok){
       if(ok){ CLOUD_DIRTY_IDS = {}; CLOUD_META_DIRTY = false; CLOUD_DEADLINES_DIRTY = false; CLOUD_FULL_PUSH_DIRTY = false; persistPendingPush(); }
       else {
         // The push failed (network/offline/timeout) -- re-queue it instead of
@@ -1306,7 +1430,7 @@ function flushCloudPush(){
   idsToSend.forEach(function(id){
     if(STATE.students[id]){
       STATE.students[id].updatedAt = nowISO();
-      patch['students/'+id] = STATE.students[id];
+      patch['students/'+id] = studentForCloud(id, STATE.students[id]);
       any = true;
     }
   });
@@ -1390,8 +1514,15 @@ function applyCloudSnapshot(cloud, lightweight){
   Object.keys(cloudStudents).forEach(function(id){
     if(id === focusedId) return;
     if(CLOUD_DIRTY_IDS[id]) return;
-    if(JSON.stringify(cloudStudents[id]) === JSON.stringify(STATE.students[id])) return;
-    STATE.students[id] = cloudStudents[id];
+    // 클라우드에서 받아온 학생 데이터에는 첨부 파일의 실제 내용(dataUrl)이
+    // 빠져 있습니다(의도적 — 위 "첨부 파일 분리 저장" 설명 참고). 이 기기가
+    // 이미 그 파일의 실제 내용을 갖고 있다면(직접 올렸거나, 전에 "불러오기"
+    // 로 받아둔 경우) 그걸 잃어버리지 않도록 새 스냅샷에 다시 채워 넣은
+    // 뒤에 비교·반영합니다 — 그냥 통째로 바꿔치기하면 방금 올린 사진이
+    // 다음 폴링에서 화면에서 사라지는 사고가 납니다.
+    var merged = mergeStudentPreservingLocalFiles(STATE.students[id], cloudStudents[id]);
+    if(JSON.stringify(merged) === JSON.stringify(STATE.students[id])) return;
+    STATE.students[id] = merged;
     changed = true;
   });
   // 삭제된 학번이 이 기기의 로컬 저장소(IndexedDB)에는 아직 남아있을 수
@@ -1425,6 +1556,23 @@ function applyCloudSnapshot(cloud, lightweight){
     if(!cloudStudents[id]) idsMissingFromCloud.push(id);
   });
   if(idsMissingFromCloud.length) scheduleCloudPush({type:'students', ids: idsMissingFromCloud});
+  // 예전 버전에서 저장되어 아직 파일 보관소로 분리되지 않은 첨부 파일이
+  // 남아있는 학생을 찾아, 이 기기가 클라우드를 읽어올 때마다 조금씩
+  // 마이그레이션합니다(fileId 부여 + 파일 보관소로 전송 + 가벼워진 학생
+  // 기록 재전송). 이렇게 해야 이미 쌓여있던 예전 첨부파일들도 특정 기기가
+  // 그 학생을 직접 열어보지 않아도, 여러 기기가 돌아가며 자연스럽게 전부
+  // 분리되어 앞으로의 폴링이 더 이상 그 무거운 내용을 실어 나르지 않게
+  // 됩니다.
+  Object.keys(STATE.students).forEach(function(id){
+    if(id === focusedId) return;
+    var student = STATE.students[id];
+    var needsMigration = false;
+    forEachFileInStudent(student, function(f){ if(f && f.dataUrl && !f.fileId) needsMigration = true; });
+    if(needsMigration){
+      ensureFileIds(id, student);
+      scheduleCloudPush({type:'student', id:id});
+    }
+  });
   if(changed) migrateState(STATE);
   return changed;
 }
@@ -1820,6 +1968,14 @@ function statusChip(status, extra){
 
 function fileChip(f){
   var isImg = f.mime && f.mime.indexOf('image/')===0;
+  // 이 기기에 실제 파일 내용(dataUrl)이 아직 없는 경우 — 다른 기기에서 올린
+  // 파일이라 평소 동기화에는 내용이 실려오지 않습니다(다운로드 용량 절감을
+  // 위한 의도적인 설계). 눌렀을 때만 그 파일 하나를 따로 받아옵니다.
+  if(!f.dataUrl && f.fileId){
+    return '<button type="button" class="file-chip" data-action="load-remote-file" data-student-id="'+escapeHtml(VIEW.studentId||'')+'" data-file-id="'+escapeHtml(f.fileId)+'" title="'+escapeHtml(f.name)+' (눌러서 불러오기)">' +
+      '<span class="ic">'+(isImg?'🖼':'📎')+'</span><span>'+escapeHtml(f.name)+' · 불러오기</span>' +
+    '</button>';
+  }
   return '<button type="button" class="file-chip" data-action="download-file" data-filechip-src="'+f.dataUrl+'" data-filechip-name="'+escapeHtml(f.name)+'" title="'+escapeHtml(f.name)+' 저장">' +
     (isImg ? '<img src="'+f.dataUrl+'" alt="">' : '<span class="ic">📎</span>') +
     '<span>'+escapeHtml(f.name)+'</span>' +
@@ -2549,10 +2705,18 @@ function buildReportModel(student){
 function buildReportModelAsync(student){
   var model = buildReportModel(student);
   return Promise.all(model.images.list.map(function(im){
-    return toJpegDataUrl(im.file.dataUrl, 480, 0.82).then(function(jpeg){
-      im.jpegDataUrl = jpeg; return im;
-    }).catch(function(){
-      im.jpegDataUrl = im.file.dataUrl; return im; // 변환 실패 시 원본이라도 사용
+    // 이 기기에 그 사진의 실제 내용이 아직 없을 수 있습니다(다른 기기에서
+    // 올린 경우 — 평소 동기화에는 사진 내용이 실려오지 않도록 바꿨기
+    // 때문). 보고서를 실제로 만드는 이 순간에만 그 사진을 따로 받아옵니다.
+    var ensureDataUrl = im.file.dataUrl ? Promise.resolve(im.file.dataUrl)
+      : resolveFileDataUrl(student.studentId, im.file.fileId).then(function(du){ im.file.dataUrl = du; return du; });
+    return ensureDataUrl.then(function(dataUrl){
+      if(!dataUrl){ im.jpegDataUrl = null; im.loadFailed = true; return im; }
+      return toJpegDataUrl(dataUrl, 480, 0.82).then(function(jpeg){
+        im.jpegDataUrl = jpeg; return im;
+      }).catch(function(){
+        im.jpegDataUrl = dataUrl; return im; // 변환 실패 시 원본이라도 사용
+      });
     });
   })).then(function(){ return model; });
 }
@@ -2577,10 +2741,14 @@ function buildReportHtml(model, trim){
   var conclusionText = clipText(conclusionParts.join(' ') || '(작성된 결론 내용이 없습니다.)', trim.conclusionLen);
 
   var shownImages = model.images.list.slice(0, trim.imageCount);
+  var failedToLoad = 0;
   var imagesHtml = shownImages.map(function(im, idx){
+    if(im.loadFailed || !(im.jpegDataUrl||im.file.dataUrl)){ failedToLoad++; return ''; }
     return '<div class="report-figure"><img src="'+(im.jpegDataUrl||im.file.dataUrl)+'" style="max-width:'+trim.imageWidthPx+'px;">' +
       '<div class="report-figure-cap">[자료 '+(idx+1)+'] '+escapeHtml(im.title||'제목 없음')+(im.description?' — '+escapeHtml(im.description):'')+'</div></div>';
   }).join('');
+  var loadFailedNote = failedToLoad
+    ? '<p class="faint" style="font-size:0.75em;">※ 첨부 자료 '+failedToLoad+'개를 서버에서 불러오지 못해 이번 보고서에서는 빠졌습니다. 네트워크 연결을 확인하고 다시 시도해주세요.</p>' : '';
   var omittedNote = (model.images.totalCount>shownImages.length)
     ? '<p class="faint" style="font-size:0.75em;">※ 첨부 자료가 많아 대표 자료 '+shownImages.length+'개만 표시했습니다(전체 '+model.images.totalCount+'개).</p>' : '';
 
@@ -2594,7 +2762,7 @@ function buildReportHtml(model, trim){
       (schoolLine.length? ' · '+escapeHtml(schoolLine.join(' ')) : '') + ' · '+fmtDateTime(nowISO())+'</div>' +
     '<h4>Ⅰ. 서론</h4><p style="white-space:pre-wrap;">'+escapeHtml(introText)+'</p>' +
     '<h4>Ⅱ. 본론</h4><p style="white-space:pre-wrap;">'+escapeHtml(bodyText)+'</p>' +
-    imagesHtml + omittedNote +
+    imagesHtml + omittedNote + loadFailedNote +
     '<h4>Ⅲ. 결론</h4><p style="white-space:pre-wrap;">'+escapeHtml(conclusionText)+'</p>' +
     '<h4>&lt;출처&gt;</h4>' + sourcesHtml;
 }
@@ -2977,15 +3145,23 @@ function handleItemFiles(inputEl, stage, idx){
   if(oversized.length){
     toast('4MB를 초과하는 파일은 제외되었습니다: '+oversized.map(function(f){return f.name;}).join(', '));
   }
+  var studentId = VIEW.studentId;
   Promise.all(okFiles.map(function(f){
     return readFileAsDataURL(f).then(function(dataUrl){
-      return {name:f.name, mime:f.type, size:f.size, dataUrl:dataUrl};
+      return {name:f.name, mime:f.type, size:f.size, dataUrl:dataUrl, fileId:uid()};
     });
   })).then(function(results){
     var draft = getStageDraft(stage);
     draft.items[idx].files = draft.items[idx].files.concat(results);
     inputEl.value = '';
     saveState(true).then(render);
+    // 파일 내용(dataUrl)은 이 기기의 로컬 저장소에는 그대로 두고(바로
+    // 보여줘야 하니까), 평소 동기화되는 학생 데이터에는 안 실리도록 별도의
+    // 파일 보관소 경로로만 올립니다 — forEachFileInStudent/studentForCloud
+    // 쪽 설명 참고.
+    if(CLOUD_ENABLED && studentId){
+      results.forEach(function(f){ pushFileBlobWithRetry(studentId, f.fileId, f.dataUrl); });
+    }
   }).catch(function(){ toast('파일을 읽는 중 오류가 발생했습니다.'); });
 }
 
@@ -3079,6 +3255,7 @@ function handleAction(action, el){
     case 'bulk-add-students': doBulkAddStudents(); break;
     case 'download-roster-template': doDownloadRosterTemplate(); break;
     case 'download-file': doDownloadFileChip(el); break;
+    case 'load-remote-file': doLoadRemoteFile(el.getAttribute('data-student-id'), el.getAttribute('data-file-id')); break;
     case 'regen-summary': delete DRAFTS.summaryOverrides[el.getAttribute('data-id')]; render(); break;
     case 'copy-summary': doCopySummary(el.getAttribute('data-id')); break;
     case 'export-summary': doExportSummary(); break;
@@ -3182,7 +3359,7 @@ function handleForm(kind, form){
         // 기존 재시도/동기화 상태(CLOUD_DIRTY_IDS 등)는 전혀 건드리지 않고,
         // 오직 이 순간 사용자에게 알려주기 위한 용도로만 사용합니다.
         if(CLOUD_ENABLED){
-          var verifyPatch = {}; verifyPatch['students/'+id] = STATE.students[id];
+          var verifyPatch = {}; verifyPatch['students/'+id] = studentForCloud(id, STATE.students[id]);
           cloudPush(verifyPatch).then(function(ok){
             if(!ok){
               window.alert('⚠ 가입 정보가 서버에 저장되지 못했습니다.\n\n지금 사용 중인 네트워크(학교 와이파이 등)에서 외부 서버 접속이 막혀 있을 수 있습니다. 이 상태로는 선생님 명단에 나타나지 않습니다.\n\n휴대폰 데이터 등 다른 네트워크가 되는 곳에서, 방금 만든 학번과 비밀번호로 다시 한 번 접속해 주세요. 화면 상단의 작은 글씨가 "☁ 동기화됨"으로 바뀌면 정상적으로 선생님 명단에 반영된 것입니다.');
@@ -3817,6 +3994,15 @@ function doDownloadFileChip(el){
   fetch(dataUrl).then(function(r){ return r.blob(); }).then(function(blob){
     offerDownload(filename, blob);
   }).catch(function(){ toast('파일을 여는 중 오류가 발생했습니다.'); });
+}
+
+function doLoadRemoteFile(studentId, fileId){
+  if(!studentId || !fileId) return;
+  toast('파일을 불러오는 중입니다…');
+  resolveFileDataUrl(studentId, fileId).then(function(dataUrl){
+    if(dataUrl){ render(); }
+    else { toast('파일을 불러오지 못했습니다. 네트워크 연결을 확인하고 다시 시도해주세요.'); }
+  });
 }
 
 /* ============================== 초기화 ============================== */
