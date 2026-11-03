@@ -2222,6 +2222,24 @@ function statusChip(status, extra){
 }
 
 /**
+ * 어떤 제출(submission) 기록 하나가 "지금 설정된 마감 기한" 기준으로 지각인지
+ * 여부. entry에 저장된 late 필드를 그대로 믿지 않고 매번 다시 계산합니다 —
+ * entry.late는 "제출 당시" 값이 그대로 박제된 값이라, 이 지각 표시 기능이
+ * 생기기 전에 이미 제출된 1·2단계 기록들은 전부 late:false로 저장돼 있어서
+ * (예전 코드가 최종 단계만 지각을 계산했음), 그 필드만 보면 실제로는 늦게
+ * 제출했던 과거 기록도 "제시간 제출"처럼 보이는 문제가 있었습니다. 여기서는
+ * 그 대신 제출 시각(entry.ts)과 "현재" 마감 기한(STATE.deadlines[stage])을
+ * 직접 비교해서, 코드 업데이트 이전에 쌓인 기록까지 포함해 모든 과거 제출에
+ * 똑같이 소급 적용되게 합니다.
+ */
+function isEntryLate(entry){
+  if(!entry || entry.type !== 'submission') return false;
+  var deadline = STATE.deadlines[entry.stage];
+  if(!deadline) return false;
+  return new Date(entry.ts).getTime() > new Date(deadline).getTime();
+}
+
+/**
  * 어떤 학생의 특정 단계(stage1/research/final)에 대한 "가장 최근 제출"이
  * 기한을 넘겨서 이루어졌는지 여부. timeline은 항상 발생한 순서대로 push()만
  * 되므로(재정렬 없음) 마지막 submission 항목이 곧 가장 최근 제출입니다.
@@ -2231,7 +2249,7 @@ function statusChip(status, extra){
 function isStageLate(student, stage){
   var subs = (student.timeline||[]).filter(function(e){ return e.stage===stage && e.type==='submission'; });
   if(!subs.length) return false;
-  return !!subs[subs.length-1].late;
+  return isEntryLate(subs[subs.length-1]);
 }
 
 function lateBadge(student, stage){
@@ -2287,7 +2305,7 @@ function entryInnerHtml(entry){
   return '<div class="entry-meta"><span class="entry-author">'+authorLabel+(entry.authorName && entry.author!=='teacher'? ' · '+escapeHtml(entry.authorName):'')+'</span>' +
       '<span>· '+typeLabel+'</span>' +
       '<span class="mono">· '+fmtDateTime(entry.ts)+'</span>' +
-      (entry.late? '<span class="chip st-late" style="margin-left:4px;"><span class="dot"></span>기한 초과</span>' : '') +
+      (isEntryLate(entry)? '<span class="chip st-late" style="margin-left:4px;"><span class="dot"></span>기한 초과</span>' : '') +
     '</div>' +
     (entry.mainText? '<div class="entry-text">'+escapeHtml(entry.mainText)+'</div>' : '') +
     itemsHtml + toolsHtml;
