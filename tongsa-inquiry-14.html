@@ -279,6 +279,23 @@
   tr.clickable{cursor:pointer;}
   tr.clickable:hover td{background:var(--surface-alt);}
   .table-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;}
+  /* 학생 명단의 "피드백" 열 — 피드백을 남긴 이름이 계속 쌓여도, 그 칸만
+     계속 넓어지면서 나머지 열(학번/이름/단계별 상태 등)의 간격이 점점
+     좁아지는 일이 없도록 이 열에만 적당한 폭을 두고, 넘치는 내용은 그
+     폭 안에서 줄바꿈됩니다. */
+  .roster-table th:last-child{width:190px;}
+  .roster-table td:last-child{white-space:normal;word-break:keep-all;overflow-wrap:break-word;vertical-align:top;}
+  .feedback-status-chip{
+    display:inline;font-size:12px;font-weight:700;line-height:1.6;
+    padding:2px 6px;border-radius:8px;
+  }
+  .feedback-status-chip .dot-inline{
+    display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:3px;vertical-align:middle;
+  }
+  .feedback-status-chip.fb-waiting{background:var(--surface-alt);color:var(--ink-soft);}
+  .feedback-status-chip.fb-waiting .dot-inline{background:var(--ink-faint);}
+  .feedback-status-chip.fb-responded{background:var(--accent-soft);color:var(--accent);}
+  .feedback-status-chip.fb-responded .dot-inline{background:var(--accent);}
 
   .notice{
     border-radius:10px;padding:12px 14px;font-size:13.5px;margin-bottom:12px;border:1px solid;
@@ -2514,7 +2531,7 @@ function screenTeacherDashboard(){
     '<div class="hgroup"><h3 style="margin:0;">학생 명단 ('+ids.length+'명)</h3>' +
       '<button class="small" data-action="show-summary">발표·세특 요약 보기<span class="teacher-only-tag" style="margin-left:6px;">교사 전용</span></button></div>' +
     (ids.length===0 ? '<p class="faint">아직 등록된 학생이 없습니다. 아래에서 추가하세요.</p>' : '') +
-    (ids.length? '<div class="table-wrap"><table><thead><tr><th>학번</th><th>이름</th><th>1차</th><th>탐구진행</th><th>최종</th><th>발표</th><th>피드백</th></tr></thead><tbody>'+rows+'</tbody></table></div>' : '') +
+    (ids.length? '<div class="table-wrap"><table class="roster-table"><thead><tr><th>학번</th><th>이름</th><th>1차</th><th>탐구진행</th><th>최종</th><th>발표</th><th>피드백</th></tr></thead><tbody>'+rows+'</tbody></table></div>' : '') +
   '</div>' +
   // 안내 메시지 작성 카드는 학생 명단 표(실제 학번이 처음 등장하는 지점) *뒤*에
   // 놓습니다 — 이 카드 안의 "원하는 학생 선택" 체크박스 목록에도 학번 텍스트가
@@ -2611,7 +2628,13 @@ function feedbackStatusChip(student){
   // 필요 없고, "누가 마지막으로 피드백을 남겼는지"만 한눈에 보려는 목적입니다.
   var nameChain = r.names.map(escapeHtml).join(' → ');
   var title = '피드백을 남긴 순서: '+r.names.join(' → ')+(isResponded ? ' · 피드백 이후 학생이 새로 작성했어요(다시 확인해 주세요)' : ' · 아직 학생의 추가 작성이 없어요');
-  return '<span class="chip '+(isResponded?'st-approved':'st-open')+'" style="font-size:12px;" title="'+escapeHtml(title)+'"><span class="dot"></span>'+nameChain+' · '+label+'</span>';
+  // 보통의 .chip(알약 모양, white-space:nowrap)을 그대로 쓰면 피드백이 쌓여
+  // 이름이 길어질수록 그 칸이 계속 넓어지면서 다른 열(학번/이름/단계 등)이
+  // 점점 좁아집니다. 전용 클래스(feedback-status-chip)는 줄바꿈이 가능해서
+  // (white-space:normal), 칸이 넓어지는 대신 그 칸 안에서 아래로 줄바꿈되고
+  // 표의 나머지 간격은 그대로 유지됩니다 — roster-table CSS가 이 열에
+  // 고정 폭을 지정해 둡니다.
+  return '<span class="feedback-status-chip '+(isResponded?'fb-responded':'fb-waiting')+'" title="'+escapeHtml(title)+'"><span class="dot-inline"></span>'+nameChain+' · '+label+'</span>';
 }
 
 function accessLogHtml(student){
