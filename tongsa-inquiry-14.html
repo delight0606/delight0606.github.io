@@ -863,7 +863,7 @@ function buildXlsxWorkbook(sheets){
  * 학생은 마지막 "미분류" 시트에 학번 그대로 모아 둡니다.
  */
 function buildSewtukByClassBlob(){
-  var ids = Object.keys(STATE.students).sort();
+  var ids = activeStudentIds(); // 휴지통에 보관된 학생은 생활기록부용 요약에서 제외
   var byClass = {};
   var unclassified = [];
   ids.forEach(function(id){
@@ -1787,6 +1787,13 @@ function pullFromCloud(lightweight){
       var onLoginOrSetupScreen = (VIEW.screen==='studentLogin' || VIEW.screen==='teacherAuth' || VIEW.screen==='teacherSetup');
       if(!modalOpen && !editingField && !onLoginOrSetupScreen) render();
     }
+    // 휴지통 보관 기간이 지난 학생을 정리할 기회입니다 — 전체(비경량) 학생
+    // 트리를 실제로 받아왔을 때만 확인합니다(그래야 각 학생의 deletedAt을
+    // 정확히 알 수 있음). 역할(교사/학생) 구분 없이 돌립니다 — 학생 로그인도
+    // 자신의 첫 pullFromCloud()에서 전체 트리를 받아오므로, 그 기회에 같이
+    // 정리해도 비용이 거의 들지 않고 정리가 더 빨라집니다. purgeExpiredTrash
+    // 설명 참고.
+    if(!pullResult.lightweight) purgeExpiredTrash();
     // 방금 받은 게 가벼운(meta/deadlines/studentsRev만) pull이었는데, 그
     // 안에서 "학생 기록이 뭔가 바뀐 것 같다"는 신호(CLOUD_NEEDS_FULL_REFRESH)
     // 를 봤다면 — 그리고 지금 화면이 전체 학생 트리가 실제로 필요한 교사
@@ -1878,7 +1885,46 @@ function newStudent(studentId,name){
                              // a login popup to this student, so each announcement is shown once
     accessLog:[], // [{ts, ip}], newest first — login history for the teacher's hacking-prevention view
     updatedAt: nowISO() // stamped on every cloud push; used to merge per-student cloud/local copies
+    // deletedAt/deletedBy는 의도적으로 기본값을 두지 않습니다(설정되지 않음 =
+    // 휴지통에 없음). 휴지통 기능 설명은 아래 TRASH_RETENTION_DAYS 주변 참고.
   };
+}
+
+/* ============================== 학생 삭제 = 휴지통(복원 가능) ==============================
+ * 예전에는 "학생 삭제" 버튼을 누르면 그 즉시 서버(클라우드)에서 완전히
+ * 지워졌고(DELETE 요청), 되돌릴 방법이 전혀 없었습니다. 실수로 삭제했을 때
+ * 복구가 불가능했던 사고를 계기로, 이제는 바로 지우지 않고 그 학생 기록에
+ * deletedAt(삭제된 시각)만 표시해 둔 채로 TRASH_RETENTION_DAYS일 동안
+ * "휴지통"에 보관합니다. 그동안은:
+ *   - 학생 명단(roster)·안내 메시지 대상·세특 요약 등 평소 화면에는 보이지
+ *     않고(activeStudentIds 참고),
+ *   - 그 학번으로는 로그인할 수 없고("휴지통에 보관 중" 안내만 보임),
+ *   - 교사가 "휴지통" 카드에서 "복원" 버튼 한 번으로 즉시 되돌릴 수 있습니다.
+ * 보관 기간이 지나면(또는 교사가 "완전 삭제"를 직접 누르면) 그때 비로소
+ * hardDeleteStudent()가 실행되어 예전과 같은 방식(서버에서 완전히 삭제 +
+ * meta.deletedStudentIds 표시)으로 영구 삭제됩니다. 이 앱은 별도의 서버가
+ * 없으므로, 보관 기간이 지난 학생을 실제로 정리하는 작업은 교사가 이 페이지를
+ * 열 때마다(평소 폴링·전체 새로고침 주기에 맞춰) "기회가 되는 대로"
+ * 실행됩니다(purgeExpiredTrash 참고) — 정확히 그 날짜·시각에 삭제되는 건
+ * 아니고, 그 이후 교사가 처음 접속하는 시점에 삭제됩니다.
+ */
+var TRASH_RETENTION_DAYS = 7;
+function daysSince(iso){
+  if(!iso) return 0;
+  var ms = Date.now() - new Date(iso).getTime();
+  return ms / (1000*60*60*24);
+}
+function isTrashed(student){ return !!(student && student.deletedAt); }
+// 휴지통에 없는(평소 명단에 보여야 할) 학번만 추려서, 학번 순으로 정렬해
+// 돌려줍니다. 학생 명단·안내 메시지 대상 선택·세특 요약 등 "활성" 학생만
+// 다뤄야 하는 모든 화면/기능이 Object.keys(STATE.students)를 직접 쓰는 대신
+// 이 함수를 함께 씁니다.
+function activeStudentIds(){
+  return Object.keys(STATE.students).filter(function(id){ return !isTrashed(STATE.students[id]); }).sort();
+}
+function trashedStudentIds(){
+  return Object.keys(STATE.students).filter(function(id){ return isTrashed(STATE.students[id]); })
+    .sort(function(a,b){ return (STATE.students[b].deletedAt||'').localeCompare(STATE.students[a].deletedAt||''); }); // 최근에 삭제된 순
 }
 
 /**
@@ -2460,7 +2506,7 @@ function backupRestoreHtml(){
  * 체크해 둔 학생 목록이 사라지지 않게 합니다.
  */
 function announcementComposerHtml(){
-  var ids = Object.keys(STATE.students).sort();
+  var ids = activeStudentIds(); // 휴지통에 있는 학생에게는 안내를 보낼 수 없음
   var checkboxes = ids.map(function(id){
     var s = STATE.students[id];
     return '<label class="small" style="display:flex;align-items:center;gap:6px;padding:3px 0;">' +
@@ -2493,8 +2539,42 @@ function announcementComposerHtml(){
   '</div>';
 }
 
+/**
+ * 휴지통(soft-delete) 카드 — 보관 기간이 지나지 않은, 삭제된 학생을 보여주고
+ * "복원"/"완전 삭제" 버튼을 제공합니다. 비어 있어도 카드 자체는 항상
+ * 보여줘서(다른 "등록된 교사" 카드 등과 같은 패턴), 교사가 이 기능이
+ * 어디 있는지 미리 알 수 있게 합니다.
+ */
+function trashHtml(){
+  var ids = trashedStudentIds();
+  if(!ids.length){
+    return '<div class="card tight">' +
+      '<div class="hgroup"><h4 style="margin:0;">🗑 휴지통</h4></div>' +
+      '<p class="faint">휴지통이 비어 있습니다.</p>' +
+    '</div>';
+  }
+  var rows = ids.map(function(id){
+    var s = STATE.students[id];
+    var daysLeft = Math.max(0, Math.ceil(TRASH_RETENTION_DAYS - daysSince(s.deletedAt)));
+    return '<tr>' +
+      '<td class="mono">'+escapeHtml(id)+'</td><td>'+escapeHtml(s.name)+'</td>' +
+      '<td class="faint" style="font-size:12.5px;">'+escapeHtml(fmtDateTime(s.deletedAt))+(s.deletedBy? ' · '+escapeHtml(s.deletedBy):'')+'</td>' +
+      '<td class="faint" style="font-size:12.5px;">'+(daysLeft>0? daysLeft+'일 후 완전 삭제' : '곧 완전 삭제됨')+'</td>' +
+      '<td style="white-space:nowrap;">' +
+        '<button type="button" class="small primary" data-action="restore-student" data-id="'+escapeHtml(id)+'">↩ 복원</button> ' +
+        '<button type="button" class="small ghost" data-action="purge-student-now" data-id="'+escapeHtml(id)+'">완전 삭제</button>' +
+      '</td>' +
+    '</tr>';
+  }).join('');
+  return '<div class="card tight">' +
+    '<div class="hgroup"><h4 style="margin:0;">🗑 휴지통 ('+ids.length+'명)</h4>' +
+      '<span class="faint" style="font-size:12.5px;">삭제 후 '+TRASH_RETENTION_DAYS+'일간 보관 — 그 안에는 복원할 수 있어요</span></div>' +
+    '<div class="table-wrap"><table><thead><tr><th>학번</th><th>이름</th><th>삭제 시각</th><th>남은 기간</th><th>작업</th></tr></thead><tbody>'+rows+'</tbody></table></div>' +
+  '</div>';
+}
+
 function screenTeacherDashboard(){
-  var ids = Object.keys(STATE.students).sort();
+  var ids = activeStudentIds(); // 휴지통에 있는 학생은 평소 명단에서 제외 — trashHtml()에서 따로 보여줌
   var rows = ids.map(function(id){
     var s = STATE.students[id];
     var cells = STAGE_ORDER.map(function(st){
@@ -2533,6 +2613,7 @@ function screenTeacherDashboard(){
     (ids.length===0 ? '<p class="faint">아직 등록된 학생이 없습니다. 아래에서 추가하세요.</p>' : '') +
     (ids.length? '<div class="table-wrap"><table class="roster-table"><thead><tr><th>학번</th><th>이름</th><th>1차</th><th>탐구진행</th><th>최종</th><th>발표</th><th>피드백</th></tr></thead><tbody>'+rows+'</tbody></table></div>' : '') +
   '</div>' +
+  trashHtml() +
   // 안내 메시지 작성 카드는 학생 명단 표(실제 학번이 처음 등장하는 지점) *뒤*에
   // 놓습니다 — 이 카드 안의 "원하는 학생 선택" 체크박스 목록에도 학번 텍스트가
   // 들어있는데, 평소엔 숨겨져 있지만(radio가 "전체 학생"일 때) DOM에는 여전히
@@ -2702,7 +2783,7 @@ function screenTeacherStudentDetail(){
         : '<span class="faint" style="font-size:12.5px;">아직 비밀번호를 설정하지 않은 학생입니다(첫 입장 시 설정됨).</span>') +
     '</div>' +
     '<div class="no-print" style="margin-top:8px;">' +
-      '<button class="small danger" data-action="delete-student" data-id="'+escapeHtml(student.studentId)+'" title="이 학생의 가입 정보와 모든 기록을 영구적으로 삭제합니다.">🗑 학생 삭제</button> ' +
+      '<button class="small danger" data-action="delete-student" data-id="'+escapeHtml(student.studentId)+'" title="휴지통으로 이동합니다. '+TRASH_RETENTION_DAYS+'일 안에는 복원할 수 있어요.">🗑 휴지통으로 이동</button> ' +
       '<span class="faint" style="font-size:12.5px;">잘못 등록된 학번·중복 가입을 삭제합니다. 삭제 후 되돌릴 수 없습니다.</span>' +
     '</div>' +
   '</div>' +
@@ -2868,7 +2949,7 @@ function generateSummaryText(student){
 }
 
 function screenTeacherSummary(){
-  var ids = Object.keys(STATE.students).sort();
+  var ids = activeStudentIds(); // 휴지통에 있는 학생은 생활기록부 요약 대상에서 제외
   var blocks = ids.map(function(id){
     var s = STATE.students[id];
     var text = DRAFTS.summaryOverrides[id];
@@ -3552,6 +3633,8 @@ function handleAction(action, el){
     case 'reset-student-password': doResetStudentPassword(el.getAttribute('data-id')); break;
     case 'reset-all-passwords': doResetAllPasswords(); break;
     case 'delete-student': doDeleteStudent(el.getAttribute('data-id')); break;
+    case 'restore-student': doRestoreStudent(el.getAttribute('data-id')); break;
+    case 'purge-student-now': doPurgeStudentNow(el.getAttribute('data-id')); break;
     case 'export-backup': doExportBackup(); break;
     case 'approve-stage': doApproveStage(el.getAttribute('data-stage')); break;
     case 'final-approve': doApproveFinal(); break;
@@ -3605,6 +3688,13 @@ function handleForm(kind, form){
     // gets recognized correctly instead of being re-created from scratch.
     pullFromCloud().then(function(){
     var existingStudent = STATE.students[id];
+    if(isTrashed(existingStudent)){
+      // 휴지통에 있는 학번은 교사가 복원하기 전까지 로그인을 막습니다 — 그대로
+      // 로그인을 허용하면 평소 명단에는 안 보이는 "유령 학생"이 계속 활동하게
+      // 되어 혼란스럽고, 교사가 휴지통에서 그 존재를 알아채기도 어려워집니다.
+      window.alert('⚠ 이 학번("'+id+'")은 현재 휴지통에 보관 중입니다.\n\n담당 선생님이 "학생 명단 > 휴지통"에서 복원해야 다시 입장할 수 있어요. 급하다면 선생님께 바로 복원을 요청해 주세요.');
+      return;
+    }
     if(existingStudent && existingStudent.passwordHash){
       // returning student: verify their password
       hashPassword(password, existingStudent.passwordSalt).then(function(hash){
@@ -3756,6 +3846,7 @@ function handleForm(kind, form){
     // here, and adding them would silently create a blank record and push it
     // over their real one -- wiping whatever they'd already submitted.
     pullFromCloud().then(function(){
+      if(isTrashed(STATE.students[sid])){ toast('이미 휴지통에 있는 학번입니다. 학생 명단 아래 "휴지통"에서 복원해 주세요.'); return; }
       if(STATE.students[sid]){ toast('이미 등록된 학번입니다.'); return; }
       if(CLOUD_ENABLED && CLOUD_SYNC.lastError){
         toast('서버와 연결이 원활하지 않아 중복 등록 여부를 확인할 수 없습니다. 네트워크 연결을 확인하고 잠시 후 다시 시도해주세요.');
@@ -4034,12 +4125,94 @@ function doResetStudentPassword(studentId){
 }
 
 /**
- * 교사가 가입자(학생) 한 명을 명단에서 완전히 삭제합니다. 오타로 잘못
- * 등록된 학번, 중복 가입, 장난 가입 등을 바로잡기 위한 기능입니다.
+ * 교사가 가입자(학생) 한 명을 "휴지통"으로 옮깁니다. 오타로 잘못 등록된
+ * 학번, 중복 가입, 장난 가입 등을 바로잡기 위한 기능입니다.
  *
- * 되돌릴 수 없는 작업입니다 — 이 학생의 모든 기록(제출물·피드백·접속
- * 기록·비밀번호)이 함께 영구적으로 삭제되므로, 실행 전 이름·학번을 보여주며
- * 한 번 더 확인합니다.
+ * 예전에는 이 버튼을 누르면 그 즉시 서버에서 영구 삭제되어 되돌릴 방법이
+ * 전혀 없었지만(실제로 실수로 삭제한 학생 기록을 되돌릴 수 없었던 사고가
+ * 있었음), 지금은 student.deletedAt만 표시해 두고 TRASH_RETENTION_DAYS일
+ * 동안 그대로 보관합니다 — 그동안은 평소 학생 명단에서 보이지 않고 그
+ * 학번으로 로그인도 안 되지만, "휴지통" 카드에서 "복원" 버튼 한 번으로
+ * 즉시 되돌릴 수 있습니다. 실제로 서버에서 영구 삭제되는 건 보관 기간이
+ * 지나거나(purgeExpiredTrash) 교사가 휴지통에서 "완전 삭제"를 직접 누를
+ * 때(doPurgeStudentNow)뿐입니다 — hardDeleteStudent 참고.
+ */
+function doDeleteStudent(studentId){
+  var student = STATE.students[studentId];
+  if(!student || isTrashed(student)) return;
+  var confirmDelete = window.confirm(
+    '🗑 학생을 휴지통으로 이동\n\n' +
+    student.name+'('+student.studentId+') 학생을 휴지통으로 옮깁니다. 이 상태에서는 학생 명단에 보이지 않고 이 학번으로 로그인도 할 수 없지만, ' +
+    TRASH_RETENTION_DAYS+'일 안에는 "휴지통" 카드의 복원 버튼으로 언제든 되돌릴 수 있어요. ' +
+    TRASH_RETENTION_DAYS+'일이 지나면 서버에서 완전히 삭제되어 더 이상 복원할 수 없습니다.\n\n' +
+    '정말 "'+student.name+'('+student.studentId+')" 학생을 휴지통으로 옮길까요?'
+  );
+  if(!confirmDelete) return;
+  student.deletedAt = nowISO();
+  student.deletedBy = currentTeacherName();
+  if(VIEW.studentId === studentId) VIEW.studentId = null;
+  VIEW.screen = 'teacherDashboard';
+  saveState(true, {type:'student', id: studentId}).then(function(){
+    render();
+    toast(student.name+' 학생을 휴지통으로 옮겼습니다. '+TRASH_RETENTION_DAYS+'일 안에는 복원할 수 있어요.');
+  });
+}
+
+/**
+ * 휴지통에 있는 학생을 평소 명단으로 되돌립니다 — deletedAt/deletedBy를
+ * 지우기만 하면 되므로(실제 서버 삭제가 아직 일어나지 않았으므로)
+ * 제출물·피드백·접속 기록 등 모든 내용이 그대로 복원됩니다.
+ */
+function doRestoreStudent(studentId){
+  var student = STATE.students[studentId];
+  if(!student || !isTrashed(student)) return;
+  var name = student.name;
+  delete student.deletedAt;
+  delete student.deletedBy;
+  saveState(true, {type:'student', id: studentId}).then(function(){
+    render();
+    toast(name+' 학생을 복원했습니다.');
+  });
+}
+
+/**
+ * 휴지통에 있는 학생을 지금 바로 서버에서 영구 삭제합니다(보관 기간을
+ * 기다리지 않음). 되돌릴 수 없으므로 한 번 더 확인합니다.
+ */
+function doPurgeStudentNow(studentId){
+  var student = STATE.students[studentId];
+  if(!student || !isTrashed(student)) return;
+  var confirmPurge = window.confirm(
+    '⚠ 완전 삭제 — 되돌릴 수 없습니다\n\n' +
+    student.name+'('+student.studentId+') 학생의 가입 정보와 모든 기록(제출물·피드백·접속 기록·비밀번호)이 ' +
+    '서버에서 영구적으로 삭제됩니다. 이후에는 휴지통에서도 더 이상 복원할 수 없습니다.\n\n' +
+    '정말 "'+student.name+'('+student.studentId+')" 학생을 완전히 삭제할까요?'
+  );
+  if(!confirmPurge) return;
+  hardDeleteStudent(studentId);
+}
+
+/**
+ * 휴지통에 보관된 지 TRASH_RETENTION_DAYS일이 지난 학생을 찾아 자동으로
+ * 완전 삭제합니다. 별도의 서버가 없는 앱이라, 교사가 이 페이지를 열어 둘
+ * 때마다(평소 전체 새로고침 주기에 맞춰) "기회가 될 때" 확인하는 식입니다 —
+ * pullFromCloud에서 전체(비경량) pull이 끝난 뒤, 교사 역할일 때만 호출됩니다.
+ */
+function purgeExpiredTrash(){
+  if(!STATE || !STATE.students) return;
+  Object.keys(STATE.students).forEach(function(id){
+    var s = STATE.students[id];
+    if(isTrashed(s) && daysSince(s.deletedAt) >= TRASH_RETENTION_DAYS){
+      hardDeleteStudent(id, true);
+    }
+  });
+}
+
+/**
+ * 실제로 서버(클라우드)에서 학생 기록을 완전히, 영구적으로 삭제합니다.
+ * doPurgeStudentNow(교사가 휴지통에서 직접 누른 경우)와
+ * purgeExpiredTrash(보관 기간이 지나 자동으로 정리되는 경우) 양쪽에서
+ * 공통으로 사용합니다.
  *
  * 한계: 이 삭제는 이 기기의 로컬 저장소와 클라우드 양쪽에서 즉시 이
  * 학생을 지웁니다. 다만 그 학생이 삭제되기 전 다른 기기(예: 본인
@@ -4051,16 +4224,9 @@ function doResetStudentPassword(studentId){
  * 모든 기기가 클라우드를 읽어올 때마다(applyCloudSnapshot) 이 목록에 있는
  * 학번은 복구 대상에서 제외하고 로컬에서도 함께 지웁니다.
  */
-function doDeleteStudent(studentId){
+function hardDeleteStudent(studentId, silent){
   var student = STATE.students[studentId];
   if(!student) return;
-  var confirmDelete = window.confirm(
-    '⚠ 학생 삭제 — 되돌릴 수 없습니다\n\n' +
-    student.name+'('+student.studentId+') 학생의 가입 정보와 모든 기록(제출물·피드백·접속 기록·비밀번호)이 ' +
-    '영구적으로 삭제됩니다. 삭제 후에는 복구할 수 없으며, 같은 학번으로 다시 가입하면 완전히 새로운 기록으로 시작합니다.\n\n' +
-    '정말 "'+student.name+'('+student.studentId+')" 학생을 삭제할까요?'
-  );
-  if(!confirmDelete) return;
   var studentName = student.name;
   delete STATE.students[studentId];
   if(!STATE.meta.deletedStudentIds) STATE.meta.deletedStudentIds = [];
@@ -4069,14 +4235,13 @@ function doDeleteStudent(studentId){
   }
   delete CLOUD_DIRTY_IDS[studentId];
   if(VIEW.studentId === studentId) VIEW.studentId = null;
-  VIEW.screen = 'teacherDashboard';
   saveState(true, {type:'meta'}).then(function(){
     render();
-    toast(studentName+' 학생이 삭제되었습니다.');
+    if(!silent) toast(studentName+' 학생의 기록이 완전히 삭제되었습니다.');
   });
   if(CLOUD_ENABLED){
     cloudDeletePath('students/'+studentId).then(function(ok){
-      if(!ok){
+      if(!ok && !silent){
         window.alert(
           '⚠ 삭제 내용이 서버(클라우드)에는 반영되지 못했습니다.\n\n' +
           '이 기기에서는 방금 삭제되어 더 이상 보이지 않지만, 네트워크 문제로 서버에는 아직 ' +
@@ -4096,7 +4261,7 @@ function doDeleteStudent(studentId){
  * 실행 전 영향받는 인원 수를 알려주는 확인 창을 한 번 더 띄웁니다.
  */
 function doResetAllPasswords(){
-  var ids = Object.keys(STATE.students);
+  var ids = activeStudentIds(); // 휴지통에 있는 학생은 비밀번호 일괄 초기화 대상에서 제외
   var withPassword = ids.filter(function(id){ return !!STATE.students[id].passwordHash; });
   if(!withPassword.length){ toast('비밀번호가 설정된 학생이 없습니다.'); return; }
   var confirmReset = window.confirm(
@@ -4266,7 +4431,7 @@ function doCopySummary(id){
 }
 
 function doExportSummary(){
-  var ids = Object.keys(STATE.students).sort();
+  var ids = activeStudentIds(); // 휴지통에 있는 학생은 세특 요약 내보내기 대상에서 제외
   var lines = ids.map(function(id){
     var text = DRAFTS.summaryOverrides[id];
     if(text===undefined) text = generateSummaryText(STATE.students[id]);
