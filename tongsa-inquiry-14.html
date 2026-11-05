@@ -199,6 +199,8 @@
   .chip.st-approved .dot{background:var(--accent);}
   .chip.st-late{background:var(--danger-soft);border-color:var(--danger-soft-border);color:var(--danger);}
   .chip.st-late .dot{background:var(--danger);}
+  .chip.st-edited{background:var(--accent-soft);border-color:var(--accent-soft-border);color:var(--accent);}
+  .chip.st-edited .dot{background:var(--accent);}
 
   /* stage timeline */
   .stage-block{border:1px solid var(--border);border-radius:var(--radius);margin-bottom:14px;overflow:hidden;}
@@ -2118,7 +2120,7 @@ var DRAFTS = {
   passcodeAttempt:'', teacherNameAttempt:'', teacherNameSetup:'',
   summaryOverrides:{} // studentId -> text (session-only edit buffer before save)
 };
-function freshStageDraft(){ return { mainText:'', items:[{title:'',description:'',files:[],itemType:''}], tools:[{name:'',reference:''}] }; }
+function freshStageDraft(){ return { mainText:'', items:[{title:'',description:'',files:[],itemType:''}], tools:[{name:'',reference:''}], editingEntryId:null }; }
 /**
  * Where a student's in-progress (not-yet-submitted) writing lives. Backed by
  * STATE.students[id].draft so it survives page reloads, browser restarts and
@@ -2306,6 +2308,7 @@ function entryInnerHtml(entry){
       '<span>· '+typeLabel+'</span>' +
       '<span class="mono">· '+fmtDateTime(entry.ts)+'</span>' +
       (isEntryLate(entry)? '<span class="chip st-late" style="margin-left:4px;"><span class="dot"></span>기한 초과</span>' : '') +
+      (entry.edited? '<span class="chip st-edited" style="margin-left:4px;" title="피드백이 달린 뒤에 학생이 이 내용을 고쳤어요.">✏️ &lt;수정&gt;</span>' : '') +
     '</div>' +
     (entry.mainText? '<div class="entry-text">'+escapeHtml(entry.mainText)+'</div>' : '') +
     itemsHtml + toolsHtml;
@@ -2330,10 +2333,20 @@ function replyEntryHtml(entry){
  * student views so every teacher (up to the recommended 3) and the student
  * see the exact same feedback/comment thread.
  */
-function renderStageEntries(entries, stage){
+function renderStageEntries(entries, stage, opts){
+  opts = opts || {};
   var topLevel = entries.filter(function(e){ return !e.threadRoot; });
+  // "가장 최근 제출" 항목만 수정 버튼을 보여줍니다 — 이전 제출들은 그 시점의
+  // 기록으로 남겨두고, 지금 학생이 고칠 수 있는 건 현재 상태를 나타내는
+  // 마지막 제출 하나뿐이라는 뜻입니다(timeline은 항상 발생 순서로만 push
+  // 되므로 마지막 submission이 곧 최신입니다).
+  var latestSubmissionId = null;
+  entries.forEach(function(e){ if(e.type==='submission') latestSubmissionId = e.id; });
   return topLevel.map(function(entry){
     var inner = entryInnerHtml(entry);
+    if(opts.allowEdit && entry.type==='submission' && entry.id===latestSubmissionId){
+      inner += '<div style="margin-top:8px;"><button type="button" class="small ghost" data-action="start-edit-submission" data-stage="'+stage+'" data-entry="'+entry.id+'">✏️ 이 제출 내용 수정하기</button></div>';
+    }
     if(entry.type==='feedback'){
       var replies = entries.filter(function(e){ return e.threadRoot===entry.id; })
         .sort(function(a,b){ return new Date(a.ts)-new Date(b.ts); });
@@ -3314,8 +3327,12 @@ function screenStudentDashboard(){
     var entries = student.timeline.filter(function(e){ return e.stage===stage; });
     var deadline = STATE.deadlines[stage];
     var editable = (status==='open' || status==='submitted');
+    // 최종 결과물 단계는 제출 버튼을 누르기 전 "제출 후에는 내용을 수정할 수
+    // 없어요"라고 이미 안내하고 있으므로, 그 약속과 맞추기 위해 수정 기능은
+    // stage1·research 두 단계에만 둡니다.
+    var allowEdit = editable && stage!=='final';
     var body = '';
-    if(entries.length) body += renderStageEntries(entries, stage);
+    if(entries.length) body += renderStageEntries(entries, stage, {allowEdit: allowEdit});
     else body += '<div class="faint" style="font-style:italic;margin-bottom:10px;">'+escapeHtml(info.hint)+'</div>';
 
     if(status==='locked'){
@@ -3401,6 +3418,7 @@ function insertOutlineMarker(stage, marker){
 
 function renderStageForm(stage, deadline, student){
   var draft = getStageDraft(stage);
+  var isEditing = !!draft.editingEntryId;
   var mainLabel = {stage1:'탐구 주제 및 선정 이유', research:'탐구 방향(서론·본론·결론)·목차 및 진행 내용', final:'최종 결과물 (개조식으로 작성)'}[stage];
   // 조사 항목/활용 도구는 "탐구 진행하기(research)" 단계에서만 작성합니다.
   // 최종 결과물 단계는 그 내용을 바탕으로 서론·본론·결론 글만 개조식으로
@@ -3425,6 +3443,7 @@ function renderStageForm(stage, deadline, student){
   var graphicOk = stage==='research' ? hasRequiredGraphicItem(student) : true;
 
   return '<form data-form="stage-submit" data-stage="'+stage+'" style="margin-top:14px;border-top:1px solid var(--border);padding-top:14px;">' +
+    (isEditing ? '<div class="notice info">✏️ <b>이전에 제출한 내용을 수정하고 있어요.</b> 아래에서 고친 뒤 "수정 내용 저장"을 누르면, 새 제출을 추가하는 게 아니라 바로 위 제출 내용이 그대로 갱신돼요.</div>' : '') +
     (isPast(deadline)? '<div class="notice warn">⏰ 제출 기한이 지났어요. 제출은 가능하지만 "기한 초과"로 표시됩니다'+(stage==='final'?' (발표 대상에서 제외될 수 있어요).':'.') +'</div>' : '') +
     (stage==='research' ? '<div class="notice info">💡 <b>통계지도나 표는 이렇게 만들어보세요.</b> 클로드, 챗GPT, 제미나이 같은 생성형 AI에게 정리한 자료를 주고 "이 내용을 표로 정리해줘" 또는 "이 데이터로 지역별 통계지도를 만들어줘"라고 요청해 보세요. 만들어진 화면을 캡처하거나 이미지로 저장한 뒤, 아래 조사 항목의 "자료 업로드"에 첨부하고 자료 유형을 선택하면 돼요.</div>' : '') +
     (stage==='research' ? '<div class="notice '+(graphicOk?'ok':'warn')+'" style="margin-bottom:14px;">'+(graphicOk?'✅ 통계지도 또는 표가 포함되어 있어요. 아주 잘하고 있어요!':'⚠️ 최종 결과물을 제출하려면 아래 조사 항목 중 하나를 통계지도나 표로 꼭 포함해야 해요. 자료 유형을 "통계지도" 또는 "표"로 선택해 주세요.')+'</div>' : '') +
@@ -3439,7 +3458,10 @@ function renderStageForm(stage, deadline, student){
       '<button type="button" class="small ghost" data-action="add-item" data-stage="'+stage+'" style="margin-bottom:12px;">+ 조사 항목 추가</button>' +
       (stage==='research' ? renderToolsSection(stage, draft) : '')
     ) : '') +
-    '<div><button type="submit" class="primary">'+(stage==='final'?'🎉 최종 결과물 제출':'제출(이어서 기록)')+'</button></div>' +
+    '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">' +
+      '<button type="submit" class="primary">'+(isEditing ? '✏️ 수정 내용 저장' : (stage==='final'?'🎉 최종 결과물 제출':'제출(이어서 기록)'))+'</button>' +
+      (isEditing ? '<button type="button" class="small ghost" data-action="cancel-edit-submission" data-stage="'+stage+'">취소</button>' : '') +
+    '</div>' +
   '</form>';
 }
 
@@ -3677,6 +3699,8 @@ function handleAction(action, el){
     case 'send-feedback': doSendFeedback(el.getAttribute('data-stage')); break;
     case 'toggle-voice-feedback': toggleVoiceFeedback(el.getAttribute('data-key')); break;
     case 'insert-outline-marker': insertOutlineMarker(el.getAttribute('data-stage'), el.getAttribute('data-marker')); break;
+    case 'start-edit-submission': doStartEditSubmission(el.getAttribute('data-stage'), el.getAttribute('data-entry')); break;
+    case 'cancel-edit-submission': doCancelEditSubmission(el.getAttribute('data-stage')); break;
     case 'open-report': doOpenReport(); break;
     case 'go-back-report': VIEW.screen = (VIEW.role==='teacher') ? 'teacherStudentDetail' : 'studentDashboard'; render(); break;
     case 'send-reply': doAddReply(el.getAttribute('data-stage'), el.getAttribute('data-root')); break;
@@ -3979,6 +4003,41 @@ function doSubmitStage(stage){
     var reallySubmit = window.confirm('정말 최종 결과물을 제출하시겠습니까?\n제출 후에는 내용을 수정할 수 없어요.');
     if(!reallySubmit) return;
   }
+
+  // "✏️ 이 제출 내용 수정하기"로 들어온 경우(draft.editingEntryId가 그
+  // 수정 대상 제출 id를 들고 있음): 새 timeline 항목을 추가하는 대신 그
+  // 제출을 그대로 갱신합니다. 최종 결과물 단계는 렌더링 쪽(allowEdit =
+  // editable && stage!=='final')에서 애초에 수정 버튼을 보여주지 않으므로
+  // 여기 도달할 일이 없습니다 — "제출 후에는 내용을 수정할 수 없어요"라는
+  // 기존 안내와 계속 맞게요.
+  if(draft.editingEntryId){
+    var target = (student.timeline||[]).filter(function(e){
+      return e.id===draft.editingEntryId && e.type==='submission' && e.stage===stage;
+    })[0];
+    if(target){
+      // 이 제출을 하고 난 뒤(제출 시각보다 나중)에 이미 피드백이 달렸다면,
+      // 교사가 본 내용을 바꾸는 것이므로 <수정> 표시를 남깁니다. 아직 아무
+      // 피드백도 없었다면(그냥 제출 전 초안을 다듬는 것과 다를 바 없으므로)
+      // 표시하지 않습니다.
+      var feedbackSince = (student.timeline||[]).some(function(e){
+        return e.stage===stage && e.type==='feedback' && new Date(e.ts).getTime() > new Date(target.ts).getTime();
+      });
+      target.mainText = draft.mainText.trim();
+      target.items = items;
+      target.tools = tools;
+      if(feedbackSince) target.edited = true;
+      resetStageDraft(stage);
+      saveState(true).then(function(){
+        render();
+        toast('수정한 내용이 저장되었습니다.');
+      });
+      return;
+    }
+    // 수정 대상을 더 이상 찾을 수 없다면(예: 그 사이 다른 기기에서 삭제됨)
+    // 수정 모드를 풀고 그냥 평소처럼 새 제출로 이어서 진행합니다.
+    draft.editingEntryId = null;
+  }
+
   var deadline = STATE.deadlines[stage];
   // 예전에는 "지각" 여부를 최종 결과물 제출에만 적용했습니다(발표 대상 여부에
   // 영향을 주니까요). 이제는 1단계(주제 선정)·2단계(탐구 진행)도 기한을 넘겨
@@ -4005,6 +4064,40 @@ function doSubmitStage(stage){
     toast('제출되었습니다.');
     if(stage==='final') showNextCelebration();
   });
+}
+
+/**
+ * "✏️ 이 제출 내용 수정하기" 버튼을 눌렀을 때: 그 제출의 현재 내용(글
+ * 내용·조사 항목·활용 도구)을 작성란(draft)에 그대로 불러와서, 처음부터
+ * 다시 타이핑하지 않고 고쳐 쓸 수 있게 합니다. draft.editingEntryId에 이
+ * 제출의 id를 기록해 두어, 나중에 "수정 내용 저장"을 누르면 doSubmitStage가
+ * 새 항목을 추가하는 대신 바로 이 제출을 갱신하도록 합니다.
+ */
+function doStartEditSubmission(stage, entryId){
+  var student = STATE.students[VIEW.studentId];
+  if(!student) return;
+  var entry = (student.timeline||[]).filter(function(e){ return e.id===entryId; })[0];
+  if(!entry || entry.type!=='submission' || entry.stage!==stage) return;
+  var draft = getStageDraft(stage);
+  draft.mainText = entry.mainText || '';
+  draft.items = (entry.items && entry.items.length) ?
+    JSON.parse(JSON.stringify(entry.items)).map(function(it){
+      return { title: it.title||'', description: it.description||'', files: it.files||[], itemType: it.itemType||'' };
+    }) : [{title:'',description:'',files:[],itemType:''}];
+  draft.tools = (entry.tools && entry.tools.length) ? JSON.parse(JSON.stringify(entry.tools)) : [{name:'',reference:''}];
+  draft.editingEntryId = entryId;
+  saveState();
+  render();
+  setTimeout(function(){
+    var form = document.querySelector('form[data-form="stage-submit"][data-stage="'+stage+'"]');
+    if(form) form.scrollIntoView({behavior:'smooth', block:'start'});
+  }, 50);
+}
+
+function doCancelEditSubmission(stage){
+  resetStageDraft(stage);
+  saveState();
+  render();
 }
 
 /* ============================== 음성 입력 (교사 피드백) ============================== */
