@@ -1222,6 +1222,69 @@ function cloudFetchJSON(url, opts, timeoutMs){
 }
 
 /**
+ * 한 경로를 읽으면서 그 값의 ETag(Firebase REST의 조건부 쓰기용 식별값)도
+ * 함께 받아옵니다. { value, etag } 형태로 반환하며, etag를 못 받으면 null
+ * 입니다(예: 그 경로가 비어 있는 경우). pushStudentRecordSafely에서, "받아올
+ * 때의 값 그대로일 때만 쓰기"를 위해 씁니다.
+ */
+function cloudFetchWithETag(path, timeoutMs){
+  if(!CLOUD_ENABLED || !window.fetch) return Promise.resolve({value:null, etag:null});
+  return new Promise(function(resolve, reject){
+    var settled = false;
+    var timer = setTimeout(function(){
+      if(settled) return;
+      settled = true;
+      reject(new Error('timeout'));
+    }, timeoutMs || 6000);
+    fetch(CLOUD_BASE + '/' + path + '.json', {headers:{'X-Firebase-ETag':'true'}}).then(function(r){
+      if(settled) return;
+      if(!r.ok){ settled = true; clearTimeout(timer); reject(new Error('HTTP '+r.status)); return; }
+      var etag = null;
+      try{ etag = r.headers.get('ETag'); }catch(e){}
+      return r.json().catch(function(){ return null; }).then(function(data){
+        if(settled) return;
+        settled = true; clearTimeout(timer);
+        resolve({value:data, etag:etag});
+      });
+    }).catch(function(err){
+      if(settled) return;
+      settled = true; clearTimeout(timer);
+      reject(err);
+    });
+  });
+}
+
+/**
+ * Firebase REST의 조건부 쓰기: 보낸 if-match 값이 그 경로의 "지금" ETag와
+ * 같을 때만 실제로 씁니다. 그 사이에 다른 기기/탭이 먼저 써버려서 ETag가
+ * 달라졌다면 서버가 409/412로 거절합니다(쓰기 자체가 일어나지 않음) —
+ * pushStudentRecordSafely가 이 신호를 보고 처음부터(다시 받아오기→합치기
+ * →다시 쓰기) 자동으로 재시도합니다.
+ */
+function cloudPutIfMatch(path, value, etag, timeoutMs){
+  if(!CLOUD_ENABLED || !window.fetch) return Promise.resolve({ok:false, status:0});
+  return new Promise(function(resolve, reject){
+    var settled = false;
+    var timer = setTimeout(function(){
+      if(settled) return;
+      settled = true;
+      reject(new Error('timeout'));
+    }, timeoutMs || 8000);
+    var headers = {'Content-Type':'application/json'};
+    if(etag) headers['if-match'] = etag;
+    fetch(CLOUD_BASE + '/' + path + '.json', {method:'PUT', headers:headers, body: JSON.stringify(value)}).then(function(r){
+      if(settled) return;
+      settled = true; clearTimeout(timer);
+      resolve({ok: r.ok, status: r.status});
+    }).catch(function(err){
+      if(settled) return;
+      settled = true; clearTimeout(timer);
+      reject(err);
+    });
+  });
+}
+
+/**
  * 반환값은 { ok, data } 입니다 — ok와 data를 분리하는 이유가 중요합니다.
  * data가 null인 경우가 두 가지인데, 절대 같은 의미가 아닙니다:
  *   (1) 클라우드에 정말 아무것도 없는 경우(ok:true, Firebase가 빈 경로에
@@ -1436,6 +1499,75 @@ function studentForCloud(studentId, student){
   forEachFileInStudent(copy, function(f){ if(f && f.dataUrl){ delete f.dataUrl; } });
   return copy;
 }
+/**
+ * 교사가 피드백을 남기는 바로 그 순간 학생이 제출/수정을 하는 것처럼, 같은
+ * 학생 기록을 서로 다른 탭/기기가 거의 동시에 건드릴 수 있습니다. timeline은
+ * 보통 id가 겹치지 않는 append-only 로그이므로 서로 다른 id의 항목은 그냥
+ * 합치면 되지만, 같은 id(예: <수정> 기능으로 같은 제출을 고친 경우)가 로컬과
+ * 원격 양쪽에 다른 내용으로 있을 수도 있습니다.
+ *
+ * 이때 "로컬이 항상 이긴다"는 규칙은 틀립니다 — pushStudentRecordSafely가
+ * 충돌로 재시도할 때마다 그 시점의 STATE(로컬)가 이미 지난 merge 결과로
+ * 덮여 있어서, 정작 이 기기가 막 수정한 내용이 오히려 "오래된 로컬 복사본"
+ * 취급을 받아 되돌려질 수 있습니다. 그래서 각 항목이 "마지막으로 실제로
+ * 바뀐 시각"(updatedAt, 없으면 생성 시각 ts로 대체)을 비교해서 더 최근 쪽을
+ * 그대로 채택합니다 — 로컬/원격이라는 꼬리표가 아니라 내용이 실제로 더
+ * 최신인 쪽이 이기므로, 몇 번을 다시 merge해도(순서가 바뀌어도) 결과가
+ * 똑같아서 재시도 과정에서 이미 반영된 변경을 또 잃어버리지 않습니다.
+ */
+function mergeTimelines(localTimeline, remoteTimeline){
+  function freshness(e){ return new Date(e.updatedAt || e.ts).getTime(); }
+  var byId = {};
+  (remoteTimeline||[]).forEach(function(e){ if(e && e.id) byId[e.id] = e; });
+  (localTimeline||[]).forEach(function(e){
+    if(!e || !e.id) return;
+    var existing = byId[e.id];
+    // 둘 다 있을 때는 더 최근에(실제로) 바뀐 쪽을 그대로 둡니다. freshness가
+    // 같다면(서로 다른 기기가 같은 항목을 전혀 안 건드린 보통의 경우) 로컬을
+    // 그대로 써도 내용이 같으므로 상관없습니다.
+    if(!existing || freshness(e) >= freshness(existing)) byId[e.id] = e;
+  });
+  var merged = Object.keys(byId).map(function(id){ return byId[id]; });
+  merged.sort(function(a,b){ return new Date(a.ts).getTime() - new Date(b.ts).getTime(); });
+  return merged;
+}
+/**
+ * 학생 한 명의 기록(students/$id)을 "안전하게" 저장합니다. 단순히 통째로
+ * PATCH/PUT하면, 받아와서(mergeTimelines) 합친 뒤 실제로 쓰기까지 걸리는
+ * 그 짧은 틈에 다른 탭/기기가 먼저 써버릴 수 있어 — 교사 피드백과 학생
+ * 제출이 거의 동시에 일어나는 이 앱의 흔한 패턴에서 — 둘 중 하나가 사라지는
+ * 사고가 여전히 가능했습니다(merge만으로는 그 틈을 완전히 막지 못함).
+ *
+ * 그래서 Firebase REST의 조건부 쓰기(ETag/If-Match)를 씁니다: "방금 받아온
+ * 그 값 그대로일 때만 쓴다"는 조건으로 쓰기를 시도하고, 그 사이에 다른 쪽이
+ * 먼저 써서 조건이 깨졌다면(서버가 거절) 처음부터(다시 받아오기→합치기→
+ * 다시 쓰기) 자동으로 재시도합니다. 이렇게 하면 두 변경이 거의 동시에
+ * 일어나도 — 몇 차례 재시도 안에서 — 항상 둘 다 안전하게 남습니다.
+ */
+function pushStudentRecordSafely(id, attemptsLeft){
+  attemptsLeft = (attemptsLeft===undefined) ? 5 : attemptsLeft;
+  if(!STATE.students[id]) return Promise.resolve(true);
+  var path = 'students/' + encodeURIComponent(id);
+  return cloudFetchWithETag(path, 6000).then(function(remote){
+    if(remote && remote.value && remote.value.timeline && remote.value.timeline.length){
+      STATE.students[id].timeline = mergeTimelines(STATE.students[id].timeline, remote.value.timeline);
+    }
+    STATE.students[id].updatedAt = nowISO();
+    var payload = studentForCloud(id, STATE.students[id]);
+    return cloudPutIfMatch(path, payload, remote && remote.etag, 8000).then(function(result){
+      if(result.ok) return true;
+      // 409/412 = 그 사이에 다른 탭/기기가 먼저 썼다는 뜻(조건 불일치) —
+      // 처음부터 다시 받아오기→합치기→쓰기를 재시도합니다. 그 외의 실패
+      // (네트워크 오류 등)는 재시도해도 똑같이 실패할 가능성이 높으니,
+      // flushCloudPush 쪽의 평소 "실패하면 dirty 유지하고 다음 기회에
+      // 다시" 메커니즘에 맡깁니다.
+      if((result.status===409 || result.status===412) && attemptsLeft > 1){
+        return pushStudentRecordSafely(id, attemptsLeft - 1);
+      }
+      return false;
+    });
+  }).catch(function(){ return false; });
+}
 function stateForCloudFull(state){
   Object.keys(state.students||{}).forEach(function(id){ ensureFileIds(id, state.students[id]); });
   var copy = JSON.parse(JSON.stringify(state));
@@ -1551,53 +1683,61 @@ function flushCloudPush(){
     return;
   }
   var idsToSend = Object.keys(pending.ids);
+  // 학생 기록(students/$id)은 교사와 학생이 거의 동시에(교사가 피드백을
+  // 남기는 바로 그 순간 학생이 제출/수정을 하는 식으로) 서로 다른 탭이나
+  // 기기에서 건드릴 수 있는 지점입니다. 그래서 학생 기록은 meta/deadlines/
+  // announcements와 같은 묶음 PATCH에 같이 싣지 않고, pushStudentRecordSafely
+  // 가 각 학생마다 따로(받아오기→합치기→조건부 쓰기, 충돌 시 자동 재시도)
+  // 처리합니다 — 그래야 두 변경이 거의 동시에 일어나도 둘 다 안전하게
+  // 남습니다(mergeTimelines/pushStudentRecordSafely 설명 참고).
+  var studentPushes = Promise.all(idsToSend.map(function(id){ return pushStudentRecordSafely(id); }));
+
   var patch = {};
-  var any = false;
+  var anyMeta = false;
   // meta와 deadlines는 서로 완전히 독립적으로만 patch에 실립니다 — 둘 중
   // 하나만 바뀌었을 때 바뀌지 않은 쪽까지 "이 기기가 기억하는 값"으로 같이
   // 덮어써버리는 사고(교사 로그인이 옛 마감 기한을 되돌리거나, 기한 저장이
   // 이 기기에 없던 다른 선생님 명단을 지워버리는 등)를 막기 위함입니다.
-  if(pending.meta){ patch.meta = STATE.meta; any = true; }
-  if(pending.deadlines){ patch.deadlines = STATE.deadlines; any = true; }
-  if(pending.announcements){ patch.announcements = STATE.announcements; any = true; }
-  idsToSend.forEach(function(id){
-    if(STATE.students[id]){
-      STATE.students[id].updatedAt = nowISO();
-      patch['students/'+id] = studentForCloud(id, STATE.students[id]);
-      any = true;
-    }
-  });
-  // 학생 기록을 하나라도 내보낼 때는 studentsRev도 함께 새 값으로 갱신해
-  // 같은 요청에 실어 보냅니다(요청 한 번 더 늘리지 않음) — 교사 화면들이
-  // 평소엔 가벼운 폴링만 하다가, 이 표식이 바뀐 걸 보고서야 전체 트리를
-  // 한 번 더 받아오게 하기 위한 신호입니다.
+  if(pending.meta){ patch.meta = STATE.meta; anyMeta = true; }
+  if(pending.deadlines){ patch.deadlines = STATE.deadlines; anyMeta = true; }
+  if(pending.announcements){ patch.announcements = STATE.announcements; anyMeta = true; }
+  // 학생 기록을 하나라도 내보낼 때는 studentsRev도 함께 새 값으로 갱신합니다
+  // — 교사 화면들이 평소엔 가벼운 폴링만 하다가, 이 표식이 바뀐 걸 보고서야
+  // 전체 트리를 한 번 더 받아오게 하기 위한 신호입니다. 학생 기록 자체는
+  // 이제 각자 따로(위 studentPushes) 전송되므로, 이건 그냥 "뭔가 바뀌었다"는
+  // 가벼운 신호일 뿐입니다.
   if(idsToSend.length){
     STATE.studentsRev = nowISO() + '-' + Math.random().toString(36).slice(2,8);
     patch.studentsRev = STATE.studentsRev;
-    any = true;
+    anyMeta = true;
   }
-  if(!any) return;
-  cloudPush(patch).then(function(ok){
-    if(ok){
-      idsToSend.forEach(function(id){ delete CLOUD_DIRTY_IDS[id]; });
+  var metaPush = anyMeta ? cloudPush(patch) : Promise.resolve(true);
+
+  if(!idsToSend.length && !anyMeta) return;
+  Promise.all([studentPushes, metaPush]).then(function(results){
+    var studentOks = results[0];
+    var metaOk = results[1];
+    idsToSend.forEach(function(id, i){
+      if(studentOks[i]) delete CLOUD_DIRTY_IDS[id];
+      else scheduleCloudPush({type:'students', ids:[id]});
+    });
+    if(metaOk){
       if(pending.meta) CLOUD_META_DIRTY = false;
       if(pending.deadlines) CLOUD_DEADLINES_DIRTY = false;
       if(pending.announcements) CLOUD_ANNOUNCEMENTS_DIRTY = false;
-      persistPendingPush();
     } else {
-      // IMPORTANT: do NOT clear CLOUD_DIRTY_IDS/CLOUD_META_DIRTY/
-      // CLOUD_DEADLINES_DIRTY here. The push failed, so the cloud still has
-      // the OLD version of these -- clearing the dirty flag would let the
-      // next poll's (stale) pull silently overwrite the local edit we just
-      // tried (and failed) to send, reverting it without any warning. Keep
-      // them dirty and re-queue so a transient failure self-heals once the
-      // connection recovers, instead of either losing the edit or leaving it
-      // stuck dirty forever.
+      // IMPORTANT: do NOT clear CLOUD_META_DIRTY/CLOUD_DEADLINES_DIRTY here.
+      // The push failed, so the cloud still has the OLD version of these --
+      // clearing the dirty flag would let the next poll's (stale) pull
+      // silently overwrite the local edit we just tried (and failed) to
+      // send, reverting it without any warning. Keep them dirty and re-queue
+      // so a transient failure self-heals once the connection recovers,
+      // instead of either losing the edit or leaving it stuck dirty forever.
       if(pending.meta) scheduleCloudPush({type:'meta'});
       if(pending.deadlines) scheduleCloudPush({type:'deadlines'});
       if(pending.announcements) scheduleCloudPush({type:'announcements'});
-      if(idsToSend.length) scheduleCloudPush({type:'students', ids: idsToSend});
     }
+    persistPendingPush();
   });
 }
 
@@ -1814,6 +1954,27 @@ function pullFromCloud(lightweight){
     // 받아오게 되어 트래픽이 크게 줄어듭니다.
     if(needsFullRefresh) return pullFromCloud(false);
   }).catch(function(){ CLOUD_SYNC.syncing = false; });
+}
+
+/**
+ * 학생/교사 로그인처럼 "이번 한 번의 클라우드 확인 결과"가 곧바로 "비밀번호가
+ * 틀렸다"는 화면으로 이어지는 지점에서 pullFromCloud() 대신 씁니다. 학교
+ * 인터넷선·휴대폰 데이터처럼 느리거나 가끔 끊기는 네트워크에서는 한 번의
+ * 시도가 실패하는 일이 드물지 않은데, 그 한 번의 실패를 곧바로 "비밀번호
+ * 오류"로 보여주면 — 특히 제출 기한에 쫓기는 학생에게는 — 실제로는 아무
+ * 문제가 없는데도 크게 당황하게 만듭니다. 그래서 실패하면 짧게 쉬었다가
+ * 조용히 몇 차례 더 재시도하고, 그래도 계속 실패할 때만(= 정말 연결이 안
+ * 되는 상황) CLOUD_SYNC.lastError가 남아서 호출한 쪽이 솔직한 안내를 보여줄
+ * 수 있습니다. 대부분의 "한 번 느려서 실패"하는 경우는 이 재시도 안에서
+ * 조용히 해결되어, 애초에 사용자에게 어떤 오류도 보일 일이 없습니다.
+ */
+function pullFromCloudWithRetry(attemptsLeft){
+  attemptsLeft = (attemptsLeft===undefined) ? 3 : attemptsLeft;
+  return pullFromCloud().then(function(){
+    if(!CLOUD_SYNC.lastError || attemptsLeft <= 1) return;
+    return new Promise(function(resolve){ setTimeout(resolve, 700); })
+      .then(function(){ return pullFromCloudWithRetry(attemptsLeft - 1); });
+  });
 }
 
 function startCloudPolling(){
@@ -3639,8 +3800,10 @@ function handleAction(action, el){
       // student's just-set password, might not have reached this device's
       // local copy yet (the periodic poll can be up to 7s behind) -- pull
       // right away so a login/signup attempt here sees the freshest data
-      // instead of a stale "등록되지 않은 학번" false negative.
-      pullFromCloud();
+      // instead of a stale "등록되지 않은 학번" false negative. Retries a
+      // couple of times on a flaky connection instead of giving up after one
+      // slow attempt (pullFromCloudWithRetry 설명 참고).
+      pullFromCloudWithRetry();
       break;
     case 'enter-teacher':
       // 이 기기가 아직 최신 클라우드 상태를 못 받아왔다면(특히 오랫동안 안
@@ -3649,10 +3812,10 @@ function handleAction(action, el){
       // 선생님이 설정을 끝낸 학급인데 이 화면에서 다시 "설정 완료"를 누르면
       // 기존 학급 전체(교사 명단·반 정보 등)가 통째로 새 값으로 덮어써지는
       // 사고로 이어집니다. 그래서 화면을 정하기 전에 먼저 클라우드에서
-      // 최신 상태를 받아옵니다(네트워크가 없거나 느리면 최대 5초 정도 걸릴
-      // 수 있지만, 실패해도 조용히 로컬 상태로 진행되어 오프라인에서도 계속
-      // 동작합니다).
-      pullFromCloud().then(function(){
+      // 최신 상태를 받아옵니다 — 느리거나 끊기는 네트워크에서는 몇 차례
+      // 조용히 재시도한 뒤(pullFromCloudWithRetry), 그래도 안 되면 실패해도
+      // 조용히 로컬 상태로 진행되어 오프라인에서도 계속 동작합니다.
+      pullFromCloudWithRetry().then(function(){
         VIEW.screen = STATE.meta.teacherPasscode ? 'teacherAuth' : 'teacherSetup';
         render();
       });
@@ -3754,7 +3917,12 @@ function handleForm(kind, form){
     // first means a student who DOES already exist in the cloud (just added
     // by the teacher moments ago, or registered from a different computer)
     // gets recognized correctly instead of being re-created from scratch.
-    pullFromCloud().then(function(){
+    // 느리거나 끊기는 네트워크(학교 인터넷선, 휴대폰 데이터 등)에서는 이
+    // 확인 한 번이 실패하는 일이 드물지 않은데, 그 한 번의 실패를 곧바로
+    // "비밀번호가 틀렸다"로 보여주면 제출 기한에 쫓기는 학생을 크게
+    // 당황시킵니다. pullFromCloudWithRetry()가 몇 차례 조용히 재시도해서,
+    // 대부분의 "한 번 느려서 실패"는 아예 화면에 드러나지도 않습니다.
+    pullFromCloudWithRetry().then(function(){
     var existingStudent = STATE.students[id];
     if(isTrashed(existingStudent)){
       // 휴지통에 있는 학번은 교사가 복원하기 전까지 로그인을 막습니다 — 그대로
@@ -3767,7 +3935,19 @@ function handleForm(kind, form){
       // returning student: verify their password
       hashPassword(password, existingStudent.passwordSalt).then(function(hash){
         if(hash !== existingStudent.passwordHash){
-          toast('비밀번호가 일치하지 않습니다. 비밀번호를 잊었다면 담당 선생님께 초기화를 요청하세요.');
+          // 바로 위 pullFromCloudWithRetry()가 몇 차례 재시도했는데도 끝내
+          // 실패했다면(CLOUD_SYNC.lastError가 남아있음), 지금 비교한 값은
+          // 이 기기에 남아있던 예전 캐시일 수 있습니다 — 예를 들어 선생님이
+          // 방금 이 학생의 비밀번호를 초기화했는데 이 기기가 그걸 아직 못
+          // 받아온 경우처럼요. 그 상태를 "비밀번호가 틀렸다"고 그대로
+          // 단정하면 실제로는 네트워크 문제인데 학생이 비밀번호를 잘못
+          // 외웠다고 믿게 됩니다 — 교사 인증 화면에 적용한 것과 같은 보호를
+          // 여기에도 둡니다.
+          if(CLOUD_ENABLED && CLOUD_SYNC.lastError){
+            toast('서버와의 연결이 원활하지 않아 최신 정보를 확인하지 못했습니다. 네트워크 연결을 확인하고 잠시 후 다시 시도해주세요.');
+          } else {
+            toast('비밀번호가 일치하지 않습니다. 비밀번호를 잊었다면 담당 선생님께 초기화를 요청하세요.');
+          }
           return;
         }
         if(existingStudent.name !== name){
@@ -3847,8 +4027,9 @@ function handleForm(kind, form){
     // 저장하면, 이 기기가 모르고 있던 다른 선생님들이 통째로 지워지는
     // 사고로 이어집니다(add-student가 중복 확인 전에 pull하는 것과 같은
     // 이유) — 그래서 교사 명단을 건드리기 전에 먼저 클라우드 최신 상태를
-    // 받아옵니다.
-    pullFromCloud().then(function(){
+    // 받아옵니다(느리거나 끊기는 네트워크에서는 pullFromCloudWithRetry가
+    // 몇 차례 조용히 재시도합니다).
+    pullFromCloudWithRetry().then(function(){
       if(pass !== STATE.meta.teacherPasscode){
         // 방금 시도한 pullFromCloud()가 실패했다면(CLOUD_SYNC.lastError가
         // 남아있음, 보통 느리거나 불안정한 네트워크 때문), 이 비교는 사실
@@ -3891,7 +4072,7 @@ function handleForm(kind, form){
     // (teacher-auth와 같은 이유), 먼저 최신 상태를 받아온 뒤에 입력한
     // 필드만 바꿔서 저장합니다. 최초 설정(isFirstTime)일 때는 클라우드가
     // 어차피 비어 있을 상황이라 pull이 의미가 없어 건너뜁니다.
-    var prep = isFirstTime ? Promise.resolve() : pullFromCloud();
+    var prep = isFirstTime ? Promise.resolve() : pullFromCloudWithRetry();
     prep.then(function(){
       if(isFirstTime){
         var setupName = (fd.get('teacherName')||'').toString().trim();
@@ -3929,7 +4110,7 @@ function handleForm(kind, form){
     // just not yet synced to THIS device) could look "not registered yet"
     // here, and adding them would silently create a blank record and push it
     // over their real one -- wiping whatever they'd already submitted.
-    pullFromCloud().then(function(){
+    pullFromCloudWithRetry().then(function(){
       if(isTrashed(STATE.students[sid])){ toast('이미 휴지통에 있는 학번입니다. 학생 명단 아래 "휴지통"에서 복원해 주세요.'); return; }
       if(STATE.students[sid]){ toast('이미 등록된 학번입니다.'); return; }
       if(CLOUD_ENABLED && CLOUD_SYNC.lastError){
@@ -4050,6 +4231,11 @@ function doSubmitStage(stage){
       target.mainText = draft.mainText.trim();
       target.items = items;
       target.tools = tools;
+      // 이 항목의 "최신 수정 시각"을 남겨둡니다 — mergeTimelines가 같은 id의
+      // 항목이 로컬/원격 양쪽에 있을 때 어느 쪽이 더 최근에 바뀐 내용인지
+      // 판단하는 유일한 근거입니다(그냥 "로컬이 항상 우선"이면, 다른 탭의
+      // 피드백과 거의 동시에 합쳐질 때 이 수정이 되돌려질 수 있었습니다).
+      target.updatedAt = nowISO();
       if(feedbackSince) target.edited = true;
       resetStageDraft(stage);
       saveState(true).then(function(){
@@ -4071,7 +4257,7 @@ function doSubmitStage(stage){
   var late = isPast(deadline);
   var entry = {
     id: uid(), stage: stage, type:'submission', author:'student', authorName: student.name,
-    ts: nowISO(), mainText: draft.mainText.trim(), items: items, tools: tools, late: late, threadRoot: null
+    ts: nowISO(), updatedAt: nowISO(), mainText: draft.mainText.trim(), items: items, tools: tools, late: late, threadRoot: null
   };
   student.timeline.push(entry);
   if(student.stageStatus[stage] !== 'approved'){
@@ -4204,7 +4390,7 @@ function doSendFeedback(stage){
   if(!text){ toast('피드백 내용을 입력하세요.'); return; }
   student.timeline.push({
     id: uid(), stage: stage, type:'feedback', author:'teacher', authorName: currentTeacherName(),
-    ts: nowISO(), mainText: text, items: [], tools: [], threadRoot: null
+    ts: nowISO(), updatedAt: nowISO(), mainText: text, items: [], tools: [], threadRoot: null
   });
   DRAFTS.feedback[key] = '';
   saveState(true).then(function(){ render(); toast('피드백을 남겼습니다.'); });
@@ -4220,7 +4406,7 @@ function doAddReply(stage, rootId){
     id: uid(), stage: stage, type:'comment',
     author: isTeacher ? 'teacher' : 'student',
     authorName: isTeacher ? currentTeacherName() : student.name,
-    ts: nowISO(), mainText: text, items: [], tools: [], threadRoot: rootId
+    ts: nowISO(), updatedAt: nowISO(), mainText: text, items: [], tools: [], threadRoot: rootId
   });
   DRAFTS.reply[rootId] = '';
   saveState(true).then(function(){ render(); toast('답글을 남겼습니다.'); });
@@ -4239,7 +4425,7 @@ function doApproveStage(stage){
   }
   student.timeline.push({
     id: uid(), stage: stage, type:'approval', author:'teacher', authorName: currentTeacherName(),
-    ts: nowISO(), mainText: STAGE_INFO[stage].label+' 단계를 승인했습니다.'+unlockedMsg, items:[], tools:[], threadRoot: null
+    ts: nowISO(), updatedAt: nowISO(), mainText: STAGE_INFO[stage].label+' 단계를 승인했습니다.'+unlockedMsg, items:[], tools:[], threadRoot: null
   });
   saveState(true).then(function(){ render(); toast('승인되었습니다.'); });
 }
@@ -4256,7 +4442,7 @@ function doApproveFinal(){
   student.stageStatus.final = 'approved';
   student.timeline.push({
     id: uid(), stage:'final', type:'approval', author:'teacher', authorName: currentTeacherName(),
-    ts: nowISO(), mainText: '모든 탐구 과정을 최종 승인했습니다. 수고했습니다!', items:[], tools:[], threadRoot: null
+    ts: nowISO(), updatedAt: nowISO(), mainText: '모든 탐구 과정을 최종 승인했습니다. 수고했습니다!', items:[], tools:[], threadRoot: null
   });
   saveState(true).then(function(){ render(); toast('최종 승인되었습니다.'); });
 }
@@ -4267,7 +4453,7 @@ function doReopenStage(stage){
   student.stageStatus[stage] = 'submitted';
   student.timeline.push({
     id: uid(), stage: stage, type:'reopen', author:'teacher', authorName: currentTeacherName(),
-    ts: nowISO(), mainText: STAGE_INFO[stage].label+' 단계에 대한 재검토를 요청했습니다.', items:[], tools:[], threadRoot: null
+    ts: nowISO(), updatedAt: nowISO(), mainText: STAGE_INFO[stage].label+' 단계에 대한 재검토를 요청했습니다.', items:[], tools:[], threadRoot: null
   });
   saveState(true).then(function(){ render(); toast('다시 열었습니다.'); });
 }
@@ -4514,7 +4700,7 @@ function doBulkAddStudents(){
   // by another teacher/computer, or just not caught up) would otherwise look
   // "new" and get silently recreated blank, overwriting that student's real
   // record on the next push.
-  pullFromCloud().then(function(){
+  pullFromCloudWithRetry().then(function(){
     if(CLOUD_ENABLED && CLOUD_SYNC.lastError){
       toast('서버와 연결이 원활하지 않아 중복 등록 여부를 확인할 수 없습니다. 네트워크 연결을 확인하고 잠시 후 다시 시도해주세요.');
       return;
@@ -4531,7 +4717,7 @@ function doDownloadRosterTemplate(){
 }
 
 function doUploadRosterExcel(file){
-  Promise.all([file.arrayBuffer().then(parseXlsxToRows), pullFromCloud()]).then(function(results){
+  Promise.all([file.arrayBuffer().then(parseXlsxToRows), pullFromCloudWithRetry()]).then(function(results){
     var rows = results[0];
     var entries = extractRosterFromRows(rows);
     if(!entries.length){
