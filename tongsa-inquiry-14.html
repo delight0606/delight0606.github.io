@@ -1272,7 +1272,16 @@ function cloudPull(lightweight){
       return {ok:false, data:null, lightweight:true};
     });
   }
-  return cloudFetchJSON(cloudUrl(), {method:'GET'}, 5000).then(function(data){
+  // 가벼운 경로들(meta/deadlines/studentsRev/announcements)은 각각 작아서
+  // 5초면 충분하지만, 여기 전체 학급 트리(학생이 많아질수록, 각자의 제출·
+  // 피드백 글이 쌓일수록 점점 커짐)는 느리거나 불안정한 네트워크(학교
+  // 인터넷선, 휴대폰 데이터 등)에서는 5초 안에 못 끝나는 경우가 실제로
+  // 있습니다. 이때 타임아웃으로 실패하면 이 기기는 "이번엔 못 받아왔다"며
+  // 조용히 예전 로컬 캐시 값을 계속 쓰게 되는데, 그 캐시가 어떤 이유로든
+  // 최신 상태와 다르면(예: 교사 비밀번호가 다른 기기에서 바뀐 뒤) 전혀
+  // 눈치채지 못한 채로 계속 틀린 값을 기준으로 판단하게 됩니다. 전송(PATCH/
+  // PUT)들이 이미 8~10초를 쓰는 것과 맞춰, 받아오는 쪽도 넉넉히 둡니다.
+  return cloudFetchJSON(cloudUrl(), {method:'GET'}, 12000).then(function(data){
     CLOUD_SYNC.lastOkAt = nowISO(); CLOUD_SYNC.lastError = null;
     return {ok:true, data:data, lightweight:false};
   }).catch(function(err){
@@ -3840,7 +3849,23 @@ function handleForm(kind, form){
     // 이유) — 그래서 교사 명단을 건드리기 전에 먼저 클라우드 최신 상태를
     // 받아옵니다.
     pullFromCloud().then(function(){
-      if(pass !== STATE.meta.teacherPasscode){ toast('비밀번호가 올바르지 않습니다.'); return; }
+      if(pass !== STATE.meta.teacherPasscode){
+        // 방금 시도한 pullFromCloud()가 실패했다면(CLOUD_SYNC.lastError가
+        // 남아있음, 보통 느리거나 불안정한 네트워크 때문), 이 비교는 사실
+        // 최신 클라우드 값이 아니라 이 기기에 남아있던 예전 로컬 캐시
+        // 값과 비교한 것입니다. 그 캐시가 어떤 이유로든 실제 최신 비밀번호와
+        // 달라져 있으면, 비밀번호를 정확히 입력했는데도 "비밀번호가 올바르지
+        // 않습니다"라고 잘못 안내되어 — 정말 비밀번호를 잊은 것과 구분할 수
+        // 없는 혼란을 줍니다. 학생 로그인 화면에는 이미 같은 보호(존재하지
+        // 않는 학번 처리에서 CLOUD_SYNC.lastError 확인)가 있었는데, 교사
+        // 인증 화면에는 빠져 있었던 부분이라 똑같이 맞춰줍니다.
+        if(CLOUD_ENABLED && CLOUD_SYNC.lastError){
+          toast('서버와의 연결이 원활하지 않아 최신 비밀번호를 확인하지 못했습니다. 네트워크 연결을 확인하고 잠시 후 다시 시도해주세요.');
+        } else {
+          toast('비밀번호가 올바르지 않습니다.');
+        }
+        return;
+      }
       if(!STATE.meta.teachers) STATE.meta.teachers = [];
       if(STATE.meta.teachers.indexOf(tname)===-1){
         if(STATE.meta.teachers.length >= MAX_TEACHERS_HINT){
