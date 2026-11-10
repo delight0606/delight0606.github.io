@@ -3111,6 +3111,12 @@ function screenTeacherDashboard(){
  * 학번/이름/반 기준으로 보이거나 숨기기만 합니다 — render()를 쓰면 매
  * 글자를 입력할 때마다 검색창 자체가 새로 만들어지면서 커서 위치/포커스가
  * 날아가 버려 한 글자 입력할 때마다 다시 클릭해야 하는 불편이 생깁니다.
+ *
+ * 검색어가 숫자로만 되어 있으면(예: "108") 학번의 "맨 앞부분"과만 맞춰봅니다
+ * (1학년 8반 전체를 보고 싶다는 뜻으로 해석) — 학번+이름 문자열 아무 데나
+ * 부분일치시키면 학번 중간에 그 숫자가 우연히 들어간 다른 학생까지 같이
+ * 걸리는 문제가 있었습니다. 숫자가 아닌 문자(이름 등)가 섞인 검색어는 예전
+ * 그대로 학번+이름 어디든 부분일치합니다.
  */
 function applyStudentSearchFilter(){
   var input = document.querySelector('[data-bind="studentSearch"]');
@@ -3123,10 +3129,21 @@ function applyStudentSearchFilter(){
   // 두 조건을 함께 봐야 합니다. DRAFTS.classFilter는 onchange 핸들러가 select
   // 값을 읽은 그대로이므로 여기서 select를 다시 조회할 필요가 없습니다.
   var classFilter = DRAFTS.classFilter || '';
+  // 학번은 항상 "학년+반+번호"가 앞에서부터 순서대로 붙어있는 숫자 5자리라서,
+  // 검색어가 숫자로만 이루어져 있다면 그 뜻은 거의 항상 "학번의 앞부분"
+  // (예: "108" → 1학년 8반 전체, "10801" → 그 학생 한 명)입니다. 그런데
+  // 예전에는 학번+이름을 합친 문자열 어디든 부분일치시켰기 때문에, "108"을
+  // 입력하면 1학년 8반 학생들뿐 아니라 학번 중간에 우연히 "108"이 들어간
+  // 다른 반 학생(예: 11108)까지 같이 걸리는 문제가 있었습니다. 그래서 검색어가
+  // 숫자로만 되어 있을 때는 학번의 맨 앞부터 일치하는지만 봅니다(이름 검색은
+  // 한글이라 숫자만 입력하는 경우가 없으므로 영향 없음).
+  var isNumericQuery = query !== '' && /^[0-9]+$/.test(query);
   var rows = table.querySelectorAll('tbody tr[data-search]');
   var visibleCount = 0;
   rows.forEach(function(row){
-    var matchesSearch = !query || row.getAttribute('data-search').indexOf(query) !== -1;
+    var matchesSearch = !query ? true :
+      isNumericQuery ? row.getAttribute('data-id').indexOf(query) === 0 :
+      row.getAttribute('data-search').indexOf(query) !== -1;
     var matchesClass = !classFilter || row.getAttribute('data-class') === classFilter;
     var match = matchesSearch && matchesClass;
     row.style.display = match ? '' : 'none';
