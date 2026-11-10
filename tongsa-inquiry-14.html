@@ -3292,6 +3292,12 @@ function teacherStudentDetailPanelHtml(student){
     '</div>';
   }).join('');
 
+  // 아코디언으로 펼쳐졌을 때 가장 먼저 보이는 내용이 "학생이 실제로 작성한
+  // 탐구 내용"(stagesHtml)이도록 순서를 잡았습니다 — 교사가 피드백을 남기러
+  // 들어올 때마다 매번 가장 먼저 봐야 하는 건 탐구 기록 자체이고, 학생 정보
+  // 카드(이름·발표 대상 여부·비밀번호 초기화·휴지통으로 이동)와 접속 기록
+  // (해킹 방지용) 같은 "탐구 내용이 아닌, 계정·접속 관리" 성격의 내용은
+  // 그 아래로 내렸습니다.
   return '<div class="backlink no-print" style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px;">' +
     '<button class="ghost small" data-action="back-to-dashboard">▲ 접기</button>' +
     '<span style="display:flex;gap:8px;flex-wrap:wrap;">' +
@@ -3299,6 +3305,7 @@ function teacherStudentDetailPanelHtml(student){
       '<button class="ghost small" data-action="print-record" title="브라우저 인쇄 대화상자에서 \'PDF로 저장\'을 선택하세요.">📄 이 학생 기록 PDF로 저장</button>' +
     '</span>' +
   '</div>' +
+  stagesHtml +
   '<div class="card tight">' +
     '<div class="hgroup"><h3 style="margin:0;">'+escapeHtml(student.name)+' <span class="mono faint">('+escapeHtml(student.studentId)+')</span></h3>' +
     (student.presentationEligible? '<span class="chip st-approved"><span class="dot"></span>발표 가능</span>' : '<span class="chip st-open"><span class="dot"></span>발표 대상 아님</span>') +
@@ -3313,8 +3320,7 @@ function teacherStudentDetailPanelHtml(student){
       '<span class="faint" style="font-size:12.5px;">잘못 등록된 학번·중복 가입을 삭제합니다. 삭제 후 되돌릴 수 없습니다.</span>' +
     '</div>' +
   '</div>' +
-  accessLogHtml(student) +
-  stagesHtml;
+  accessLogHtml(student);
 }
 
 /* ============================== 교사 - 발표/세특 요약 (교사만 접근 가능) ============================== */
@@ -3809,19 +3815,9 @@ function screenStudentDashboard(){
     // 없어요"라고 이미 안내하고 있으므로, 그 약속과 맞추기 위해 수정 기능은
     // stage1·research 두 단계에만 둡니다.
     var allowEdit = editable && stage!=='final';
-    // 예전에는 "이미 제출한 기록"을 먼저 보여주고 그 아래에 작성/상태 영역을
-    // 뒀는데, 학생이 화면을 열자마자 "지금 뭘 써야 하는지"부터 보이는 게
-    // 먼저이고 이전 제출 기록은 참고용으로 그 아래에 있는 게 더 자연스럽다는
-    // 요청으로 순서를 바꿨습니다 — 작성/상태 영역(아래)을 먼저, 제출 기록을
-    // 나중에 둡니다. 아직 한 번도 제출한 적이 없을 때(entries가 비어있을 때)
-    // 보여주는 안내문(info.hint)은 "무엇을 써야 할지" 알려주는 길잡이라서
-    // 지금처럼 작성란 바로 위에 그대로 둡니다(옮길 "이전 기록"이 애초에
-    // 없으므로).
-    var hasEntries = entries.length > 0;
     var body = '';
-    if(!hasEntries){
-      body += '<div class="faint" style="font-style:italic;margin-bottom:10px;">'+escapeHtml(info.hint)+'</div>';
-    }
+    if(entries.length) body += renderStageEntries(entries, stage, {allowEdit: allowEdit});
+    else body += '<div class="faint" style="font-style:italic;margin-bottom:10px;">'+escapeHtml(info.hint)+'</div>';
 
     if(status==='locked'){
       body += '<div class="notice info">🔒 탐구 주제(1차)가 승인되면 이 단계를 진행할 수 있어요.</div>';
@@ -3831,10 +3827,6 @@ function screenStudentDashboard(){
       body += stage==='final'
         ? '<div class="notice ok">🎓 모든 탐구 과정이 최종 승인되었어요. 정말 수고 많았어요! 이제 다시 제출하지 않아도 돼요.</div>'
         : '<div class="notice ok">👍 이 단계는 승인되었어요. 다음 단계를 진행해 보세요.</div>';
-    }
-
-    if(hasEntries){
-      body += renderStageEntries(entries, stage, {allowEdit: allowEdit});
     }
     return '<div class="stage-block">' +
       '<div class="stage-head">' +
