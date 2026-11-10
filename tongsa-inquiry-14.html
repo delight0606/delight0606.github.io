@@ -1562,11 +1562,38 @@ function pushStudentRecordSafely(id, attemptsLeft){
   if(!STATE.students[id]) return Promise.resolve(true);
   var path = 'students/' + encodeURIComponent(id);
   return cloudFetchWithETag(path, 6000).then(function(remote){
+    var local = STATE.students[id];
     if(remote && remote.value && remote.value.timeline && remote.value.timeline.length){
-      STATE.students[id].timeline = mergeTimelines(STATE.students[id].timeline, remote.value.timeline);
+      local.timeline = mergeTimelines(local.timeline, remote.value.timeline);
     }
-    STATE.students[id].updatedAt = nowISO();
-    var payload = studentForCloud(id, STATE.students[id]);
+    // 비밀번호(해시/salt)도 timeline과 똑같은 이유로 여러 기기가 동시에
+    // 건드릴 수 있는 지점입니다 — 그런데 timeline과 달리 "항목 id별로
+    // 합치기"가 불가능한 단일 값이라, 지금까지는 그냥 "이 기기가 아는 값"을
+    // 그대로 실어 보냈습니다. 그 결과: 학생이 방금 이 기기에서 처음
+    // 비밀번호를 만들었는데, 바로 그 순간 다른 기기(교사 화면 등)가 "아직
+    // 비밀번호를 모르는"(null) 낡은 로컬 복사본으로 이 학생의 다른 어떤
+    // 항목이든 하나라도 저장하면 — 그 쓰기가 조건부 쓰기 경합에서 이기는
+    // 순간 방금 만든 비밀번호가 흔적도 없이 사라집니다. 로그인했는데 분명
+    // 방금 만든 비밀번호가 "틀렸다"고 나오는 증상이 바로 이것입니다.
+    // passwordUpdatedAt(실제로 비밀번호를 설정/초기화한 시각)을 비교해
+    // 더 최근 쪽을 그대로 채택해서 막습니다.
+    if(remote && remote.value){
+      var remoteStamp = remote.value.passwordUpdatedAt ? new Date(remote.value.passwordUpdatedAt).getTime() : null;
+      var localStamp = local.passwordUpdatedAt ? new Date(local.passwordUpdatedAt).getTime() : null;
+      var remoteIsNewer = (remoteStamp!==null && (localStamp===null || remoteStamp > localStamp));
+      // 이 보호 기능이 생기기 전부터 있던, 시각 기록이 아예 없는 오래된
+      // 기록이라면(둘 다 null) 적어도 "이 기기는 비밀번호를 null로만 아는데
+      // 서버엔 이미 실제 비밀번호가 있다"는 가장 흔한 사고 패턴만이라도
+      // 보수적으로 막아줍니다.
+      var localLooksStale = (remoteStamp===null && localStamp===null && !local.passwordHash && remote.value.passwordHash);
+      if(remoteIsNewer || localLooksStale){
+        local.passwordHash = remote.value.passwordHash;
+        local.passwordSalt = remote.value.passwordSalt;
+        local.passwordUpdatedAt = remote.value.passwordUpdatedAt || local.passwordUpdatedAt;
+      }
+    }
+    local.updatedAt = nowISO();
+    var payload = studentForCloud(id, local);
     return cloudPutIfMatch(path, payload, remote && remote.etag, 8000).then(function(result){
       if(result.ok) return true;
       // 409/412 = 그 사이에 다른 탭/기기가 먼저 썼다는 뜻(조건 불일치) —
@@ -4043,20 +4070,30 @@ function handleForm(kind, form){
         }
         STATE.students[id].passwordHash = hash;
         STATE.students[id].passwordSalt = salt;
+        // pushStudentRecordSafely가 이 값과 다른 기기(예: 교사 화면)의 "아직
+        // 비밀번호를 모르는" 낡은 로컬 복사본이 거의 동시에 서버로 올라갈 때,
+        // 방금 막 만든 이 비밀번호가 조용히 지워지지 않도록 비교 기준으로
+        // 삼습니다(passwordUpdatedAt 설명 참고).
+        STATE.students[id].passwordUpdatedAt = nowISO();
         enterStudentDashboard(id, true);
-        // 새로 가입한 학생 1명의 기록을 지금 바로(평소의 400ms 디바운스 큐와는
-        // 별도로) 한 번 더 직접 전송해 보고, 그 결과를 학생에게 명확히
+        // 새로 가입한 학생 1명의 기록을 지금 바로(평소의 400ms 디바운스 큐를
+        // 기다리지 않고) 한 번 더 직접 전송해 보고, 그 결과를 학생에게 명확히
         // 알려줍니다. 화면만 보면 "가입 완료"처럼 보여도, 이 기기/네트워크가
         // 서버(클라우드)에 전혀 연결되지 못하면(예: 일부 학교 네트워크의
         // 방화벽이 외부 데이터베이스 주소를 막아둔 경우) 가입 내용이 이
         // 기기에만 남고 선생님 명단에는 영영 나타나지 않을 수 있습니다 —
         // 이런 경우를 학생 스스로도, 선생님도 알아챌 방법이 없었던 것이
-        // "가입은 됐는데 명단에 안 보인다" 문제의 핵심 원인입니다. 이 확인은
-        // 기존 재시도/동기화 상태(CLOUD_DIRTY_IDS 등)는 전혀 건드리지 않고,
-        // 오직 이 순간 사용자에게 알려주기 위한 용도로만 사용합니다.
+        // "가입은 됐는데 명단에 안 보인다" 문제의 핵심 원인입니다.
+        //
+        // 예전에는 여기서 cloudPush(통째 PATCH)를 직접 썼는데, 그건 merge나
+        // 조건부 쓰기(ETag/If-Match) 없이 "이 기기가 지금 아는 내용"을 그냥
+        // 덮어쓰는 방식이라 — 하필 바로 이 순간(학생이 막 로그인하는 순간)
+        // 교사가 같은 학생을 보며 피드백을 남기면, 그 피드백이 이 무조건
+        // 덮어쓰기에 통째로 사라질 수 있었습니다(재현 테스트로 확인). 지금은
+        // pushStudentRecordSafely를 그대로 재사용해서, 다른 기기의 동시 변경과
+        // 안전하게 합쳐지면서도 "지금 바로" 전송하는 효과는 그대로 유지합니다.
         if(CLOUD_ENABLED){
-          var verifyPatch = {}; verifyPatch['students/'+id] = studentForCloud(id, STATE.students[id]);
-          cloudPush(verifyPatch).then(function(ok){
+          pushStudentRecordSafely(id).then(function(ok){
             if(!ok){
               window.alert('⚠ 가입 정보가 서버에 저장되지 못했습니다.\n\n지금 사용 중인 네트워크(학교 와이파이 등)에서 외부 서버 접속이 막혀 있을 수 있습니다. 이 상태로는 선생님 명단에 나타나지 않습니다.\n\n휴대폰 데이터 등 다른 네트워크가 되는 곳에서, 방금 만든 학번과 비밀번호로 다시 한 번 접속해 주세요. 화면 상단의 작은 글씨가 "☁ 동기화됨"으로 바뀌면 정상적으로 선생님 명단에 반영된 것입니다.');
             }
@@ -4522,6 +4559,7 @@ function doResetStudentPassword(studentId){
   if(!confirmReset) return;
   student.passwordHash = null;
   student.passwordSalt = null;
+  student.passwordUpdatedAt = nowISO();
   saveState(true, {type:'student', id: studentId}).then(function(){ render(); toast('비밀번호가 초기화되었습니다.'); });
 }
 
@@ -4701,6 +4739,7 @@ function doResetAllPasswords(){
   withPassword.forEach(function(id){
     STATE.students[id].passwordHash = null;
     STATE.students[id].passwordSalt = null;
+    STATE.students[id].passwordUpdatedAt = nowISO();
   });
   saveState(true, {type:'students', ids: withPassword}).then(function(){ render(); toast(withPassword.length+'명의 비밀번호가 모두 초기화되었습니다.'); });
 }
