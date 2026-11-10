@@ -978,7 +978,7 @@ function queueCelebration(kind, title, sub){
 function checkNewCelebrations(student){
   var celebrated = student.celebratedIds || (student.celebratedIds = []);
   var newOnes = student.timeline.filter(function(e){
-    return (e.type==='feedback' || e.type==='approval') && e.author==='teacher' && celebrated.indexOf(e.id)===-1;
+    return (e.type==='feedback' || e.type==='approval') && e.author==='teacher' && !e.deleted && celebrated.indexOf(e.id)===-1;
   });
   if(!newOnes.length) return;
   newOnes.forEach(function(e){ celebrated.push(e.id); });
@@ -2430,6 +2430,7 @@ var VIEW = { screen:'home', role:null, studentId:null, teacherAuthed:false, teac
 var DRAFTS = {
   stageForm:{}, // stage -> {mainText, items:[{title,description,files:[]}], tools:[{name,reference}]}
   feedback:{},  // "stage|studentId" -> text
+  feedbackEditingId:{}, // "stage|studentId" -> 지금 수정 중인 피드백 entry의 id (doStartEditFeedback 참고)
   reply:{},     // entryId -> text
   roster:'',    // bulk add textarea
   newStudentId:'', newStudentName:'',
@@ -2697,6 +2698,16 @@ function renderStageEntries(entries, stage, opts){
     var inner = entryInnerHtml(entry);
     if(opts.allowEdit && entry.type==='submission' && entry.id===latestSubmissionId){
       inner += '<div style="margin-top:8px;"><button type="button" class="small ghost" data-action="start-edit-submission" data-stage="'+stage+'" data-entry="'+entry.id+'">✏️ 이 제출 내용 수정하기</button></div>';
+    }
+    // 교사가 남긴 피드백을 잘못 달았거나 내용을 고치고 싶을 때를 위한
+    // 수정/삭제 버튼 — 교사의 학생 상세 패널(allowFeedbackManage)에서만
+    // 보이고, 학생이 보는 화면이나 다른 유형(제출·승인 등)에는 나타나지
+    // 않습니다. doStartEditFeedback/doDeleteFeedback 참고.
+    if(opts.allowFeedbackManage && entry.type==='feedback' && entry.author==='teacher'){
+      inner += '<div class="no-print" style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap;">' +
+        '<button type="button" class="small ghost" data-action="start-edit-feedback" data-stage="'+stage+'" data-entry="'+entry.id+'">✏️ 수정</button>' +
+        '<button type="button" class="small ghost danger" data-action="delete-feedback" data-stage="'+stage+'" data-entry="'+entry.id+'">🗑 삭제</button>' +
+      '</div>';
     }
     if(entry.type==='feedback'){
       var replies = entries.filter(function(e){ return e.threadRoot===entry.id; })
@@ -3222,7 +3233,7 @@ function feedbackCountBadge(entries){
  */
 function feedbackResponseStatus(student){
   var timeline = student.timeline || [];
-  var feedbackEntries = timeline.filter(function(e){ return e.type==='feedback' && !e.threadRoot; })
+  var feedbackEntries = timeline.filter(function(e){ return e.type==='feedback' && !e.threadRoot && !e.deleted; })
     .sort(function(a,b){ return (a.ts||'') < (b.ts||'') ? -1 : ((a.ts||'') > (b.ts||'') ? 1 : 0); });
   if(!feedbackEntries.length) return { names: [], status: 'none' };
   var names = feedbackEntries.map(function(e){ return e.authorName || '교사'; });
@@ -3281,9 +3292,23 @@ function teacherStudentDetailPanelHtml(student){
   var stagesHtml = STAGE_ORDER.map(function(stage){
     var info = STAGE_INFO[stage];
     var status = student.stageStatus[stage];
-    var entries = student.timeline.filter(function(e){ return e.stage===stage; });
+    // 삭제된 피드백(entry.deleted — doDeleteFeedback 참고)은 여기서부터 아예
+    // 제외합니다. 실제로 배열에서 지우는 대신 "삭제됨"으로 표시만 해 두는
+    // 이유는, 다른 기기와 동기화할 때 쓰는 mergeTimelines가 "두 기기의
+    // timeline을 id 기준으로 합집합"하는 방식이라 — 정말로 배열에서 지워
+    // 버리면 다음 번 받아오기(pull)나 쓰기 전 합치기에서 원격에 남아있는
+    // 옛 사본이 다시 되살아나 버립니다. "삭제됨 + 최신 수정 시각"으로 표시해
+    // 두면, 같은 id의 항목 중 더 최근 것이 이기는 기존 병합 규칙 그대로
+    // 삭제도 다른 기기에 안전하게 전파됩니다.
+    var entries = student.timeline.filter(function(e){ return e.stage===stage && !e.deleted; });
     var deadline = STATE.deadlines[stage];
-    var fbDraft = DRAFTS.feedback[stage+'|'+student.studentId] || '';
+    var fbKey = stage+'|'+student.studentId;
+    var fbDraft = DRAFTS.feedback[fbKey] || '';
+    // 이 단계의 피드백 작성란이 지금 "새 피드백 작성" 모드인지, 기존 피드백을
+    // "수정" 중인지(✏️ 수정 버튼으로 들어옴, doStartEditFeedback 참고)를
+    // 구분합니다. 수정 중일 때는 안내 문구·버튼 문구가 바뀌고 "취소" 버튼이
+    // 추가됩니다 — 학생이 제출 내용을 수정할 때(renderStageForm)와 같은 패턴.
+    var fbEditingId = DRAFTS.feedbackEditingId[fbKey] || null;
     return '<div class="stage-block">' +
       '<div class="stage-head">' +
         '<div class="left">' +
@@ -3294,14 +3319,16 @@ function teacherStudentDetailPanelHtml(student){
         '<div class="right">' + (stage==='research'? feedbackCountBadge(entries)+' ' : '') + statusChip(status) + '</div>' +
       '</div>' +
       '<div class="stage-body '+(entries.length?'':'empty')+'">' +
-        (entries.length? renderStageEntries(entries, stage) : '아직 기록이 없습니다.') +
+        (entries.length? renderStageEntries(entries, stage, {allowFeedbackManage: true}) : '아직 기록이 없습니다.') +
         '<div class="feedback-composer no-print" style="margin-top:14px;border-top:1px solid var(--border);padding-top:12px;">' +
+          (fbEditingId? '<div class="notice info" style="margin-bottom:8px;">✏️ <b>피드백을 수정하고 있어요.</b> 아래에서 고친 뒤 "수정 내용 저장"을 누르면, 새 피드백을 추가하는 게 아니라 바로 그 피드백이 갱신돼요.</div>' : '') +
           '<div class="hgroup" style="margin-bottom:4px;"><label style="margin-bottom:0;">이 단계에 피드백 남기기</label>' +
-            (voiceInputSupported()? '<button type="button" class="small ghost voice-btn" data-action="toggle-voice-feedback" data-key="'+stage+'|'+student.studentId+'">🎤 음성으로 입력</button>' : '') +
+            (voiceInputSupported()? '<button type="button" class="small ghost voice-btn" data-action="toggle-voice-feedback" data-key="'+fbKey+'">🎤 음성으로 입력</button>' : '') +
           '</div>' +
-          '<textarea data-feedback-input="'+stage+'|'+student.studentId+'" placeholder="구체화가 필요한 부분, 칭찬할 점 등을 자유롭게 남기세요. 타이핑하거나 위 마이크 버튼으로 말해서 입력할 수 있어요.">'+escapeHtml(fbDraft)+'</textarea>' +
+          '<textarea data-feedback-input="'+fbKey+'" placeholder="구체화가 필요한 부분, 칭찬할 점 등을 자유롭게 남기세요. 타이핑하거나 위 마이크 버튼으로 말해서 입력할 수 있어요.">'+escapeHtml(fbDraft)+'</textarea>' +
           '<div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap;">' +
-            '<button class="small primary" data-action="send-feedback" data-stage="'+stage+'">피드백 남기기</button>' +
+            '<button class="small primary" data-action="send-feedback" data-stage="'+stage+'">'+(fbEditingId?'수정 내용 저장':'피드백 남기기')+'</button>' +
+            (fbEditingId? '<button type="button" class="small ghost" data-action="cancel-edit-feedback" data-stage="'+stage+'">취소</button>' : '') +
             stageActionsForTeacher(student, stage) +
           '</div>' +
         '</div>' +
@@ -3443,7 +3470,7 @@ function generateSummaryText(student){
   if(!topic && !research && !final) return '아직 탐구 활동을 시작하지 못함.';
 
   var feedbackCount = (student.timeline||[]).filter(function(e){
-    return (e.stage==='stage1' || e.stage==='research') && e.type==='feedback' && !e.threadRoot;
+    return (e.stage==='stage1' || e.stage==='research') && e.type==='feedback' && !e.threadRoot && !e.deleted;
   }).length;
 
   var submittedItems = [];
@@ -3617,7 +3644,7 @@ function buildReportModel(student){
   var body = (splitFinal && splitFinal.body) || finalText || researchText || '';
   var conclusion = (splitFinal && splitFinal.conclusion) || (splitResearch && splitResearch.conclusion) || '';
 
-  var feedbackCount = student.timeline.filter(function(e){ return e.type==='feedback' && !e.threadRoot; }).length;
+  var feedbackCount = student.timeline.filter(function(e){ return e.type==='feedback' && !e.threadRoot && !e.deleted; }).length;
   var feedbackNote = feedbackCount>0
     ? '탐구를 진행하며 총 '+feedbackCount+'회의 교사 피드백을 반영하여 내용을 구체화하고 보완하였다.'
     : '';
@@ -3825,7 +3852,9 @@ function screenStudentDashboard(){
   var stagesHtml = STAGE_ORDER.map(function(stage){
     var info = STAGE_INFO[stage];
     var status = student.stageStatus[stage];
-    var entries = student.timeline.filter(function(e){ return e.stage===stage; });
+    // 교사가 삭제한 피드백(entry.deleted)은 학생에게도 보이지 않아야 하므로
+    // 여기서도 제외합니다 — teacherStudentDetailPanelHtml의 같은 처리 참고.
+    var entries = student.timeline.filter(function(e){ return e.stage===stage && !e.deleted; });
     var deadline = STATE.deadlines[stage];
     var editable = (status==='open' || status==='submitted');
     // 최종 결과물 단계는 제출 버튼을 누르기 전 "제출 후에는 내용을 수정할 수
@@ -4253,6 +4282,9 @@ function handleAction(action, el){
     case 'insert-outline-marker': insertOutlineMarker(el.getAttribute('data-stage'), el.getAttribute('data-marker')); break;
     case 'start-edit-submission': doStartEditSubmission(el.getAttribute('data-stage'), el.getAttribute('data-entry')); break;
     case 'cancel-edit-submission': doCancelEditSubmission(el.getAttribute('data-stage')); break;
+    case 'start-edit-feedback': doStartEditFeedback(el.getAttribute('data-stage'), el.getAttribute('data-entry')); break;
+    case 'cancel-edit-feedback': doCancelEditFeedback(el.getAttribute('data-stage')); break;
+    case 'delete-feedback': doDeleteFeedback(el.getAttribute('data-stage'), el.getAttribute('data-entry')); break;
     case 'open-report': doOpenReport(); break;
     case 'go-back-report':
       // teacherStudentDetail 화면은 더 이상 존재하지 않습니다(학생 상세가
@@ -4557,7 +4589,7 @@ function handleForm(kind, form){
 }
 
 function resetAllDrafts(){
-  DRAFTS.stageForm = {}; DRAFTS.feedback = {}; DRAFTS.reply = {};
+  DRAFTS.stageForm = {}; DRAFTS.feedback = {}; DRAFTS.feedbackEditingId = {}; DRAFTS.reply = {};
 }
 
 /**
@@ -4641,7 +4673,7 @@ function doSubmitStage(stage){
       // 피드백도 없었다면(그냥 제출 전 초안을 다듬는 것과 다를 바 없으므로)
       // 표시하지 않습니다.
       var feedbackSince = (student.timeline||[]).some(function(e){
-        return e.stage===stage && e.type==='feedback' && new Date(e.ts).getTime() > new Date(target.ts).getTime();
+        return e.stage===stage && e.type==='feedback' && !e.deleted && new Date(e.ts).getTime() > new Date(target.ts).getTime();
       });
       // <수정> 표시가 뜨는 경우(feedbackSince)에는, 덮어쓰기 전 지금 내용을
       // previousVersion에 남겨둡니다 — 교사가 여러 학생을 한꺼번에 볼 때
@@ -4812,12 +4844,97 @@ function doSendFeedback(stage){
   var key = stage+'|'+student.studentId;
   var text = (DRAFTS.feedback[key]||'').trim();
   if(!text){ toast('피드백 내용을 입력하세요.'); return; }
+  // "✏️ 수정" 버튼으로 들어온 경우(DRAFTS.feedbackEditingId[key]가 그 피드백의
+  // id를 들고 있음): 새 피드백을 추가하는 대신 그 피드백 자체를 갱신합니다 —
+  // 학생 제출을 수정하는 doSubmitStage의 editingEntryId 패턴과 동일합니다.
+  var editingId = DRAFTS.feedbackEditingId[key];
+  if(editingId){
+    var target = (student.timeline||[]).filter(function(e){
+      return e.id===editingId && e.type==='feedback' && e.stage===stage;
+    })[0];
+    if(target){
+      target.mainText = text;
+      target.updatedAt = nowISO();
+      DRAFTS.feedback[key] = '';
+      DRAFTS.feedbackEditingId[key] = null;
+      saveState(true).then(function(){ render(); toast('피드백을 수정했습니다.'); });
+      return;
+    }
+    // 수정 대상을 더 이상 찾을 수 없다면(예: 그 사이 다른 기기에서 삭제됨)
+    // 수정 모드를 풀고 새 피드백으로 이어서 진행합니다.
+    DRAFTS.feedbackEditingId[key] = null;
+  }
   student.timeline.push({
     id: uid(), stage: stage, type:'feedback', author:'teacher', authorName: currentTeacherName(),
     ts: nowISO(), updatedAt: nowISO(), mainText: text, items: [], tools: [], threadRoot: null
   });
   DRAFTS.feedback[key] = '';
   saveState(true).then(function(){ render(); toast('피드백을 남겼습니다.'); });
+}
+
+/**
+ * 피드백 항목의 "✏️ 수정" 버튼: 그 피드백의 현재 내용을 작성란(DRAFTS.feedback)에
+ * 그대로 불러오고, DRAFTS.feedbackEditingId에 그 피드백의 id를 기록해 두어
+ * doSendFeedback이 새 피드백을 추가하는 대신 이 피드백을 갱신하도록 합니다.
+ */
+function doStartEditFeedback(stage, entryId){
+  var student = STATE.students[VIEW.studentId];
+  if(!student) return;
+  var entry = (student.timeline||[]).filter(function(e){ return e.id===entryId; })[0];
+  if(!entry || entry.type!=='feedback' || entry.stage!==stage) return;
+  var key = stage+'|'+student.studentId;
+  DRAFTS.feedback[key] = entry.mainText || '';
+  DRAFTS.feedbackEditingId[key] = entryId;
+  render();
+  setTimeout(function(){
+    var ta = document.querySelector('textarea[data-feedback-input="'+key+'"]');
+    if(ta){ ta.scrollIntoView({behavior:'smooth', block:'center'}); ta.focus(); }
+  }, 50);
+}
+
+function doCancelEditFeedback(stage){
+  var student = STATE.students[VIEW.studentId];
+  if(!student) return;
+  var key = stage+'|'+student.studentId;
+  DRAFTS.feedback[key] = '';
+  DRAFTS.feedbackEditingId[key] = null;
+  render();
+}
+
+/**
+ * 피드백의 "🗑 삭제" 버튼. 화면에서는 완전히 사라지지만(화면을 그리는 모든
+ * 곳에서 entry.deleted를 걸러냅니다 — teacherStudentDetailPanelHtml·
+ * screenStudentDashboard의 entries 필터, feedbackResponseStatus 등 참고),
+ * 실제로는 timeline 배열에서 지우지 않고 entry.deleted=true로 "표시"만
+ * 합니다. 배열에서 정말로 지워버리면: 이 기기가 그 삭제를 클라우드에 보내기
+ * 전에(또는 다른 기기가 아직 그 삭제를 못 받아온 상태에서) pushStudentRecordSafely/
+ * pullFromCloud의 mergeTimelines가 "두 기기의 timeline을 id 기준으로
+ * 합집합"하기 때문에, 원격에 남아있는 삭제 전 사본이 되살아나 버립니다
+ * (실제로 이 방식으로 먼저 구현했다가, 삭제 직후 화면을 벗어났다 돌아오면
+ * 삭제한 피드백이 다시 나타나는 걸 테스트로 확인하고 고쳤습니다). "삭제됨
+ * + 최신 수정 시각"으로 표시해 두면, 같은 id의 항목 중 더 최근 쪽이 이기는
+ * 기존 병합 규칙 그대로 삭제도 다른 기기에 안전하게 전파됩니다 — 학생 제출
+ * 수정과 똑같은 매커니즘입니다.
+ *
+ * 답글(threadRoot===entryId인 'comment' 항목)은 따로 지우지 않아도, 부모
+ * 피드백이 entries에서 제외되는 순간 화면에 함께 안 보이게 됩니다(랜더링
+ * 쪽이 먼저 기록 목록을 걸러낸 뒤에 각 항목의 답글을 찾는 구조라서).
+ */
+function doDeleteFeedback(stage, entryId){
+  var student = STATE.students[VIEW.studentId];
+  if(!student) return;
+  var entry = (student.timeline||[]).filter(function(e){ return e.id===entryId; })[0];
+  if(!entry || entry.type!=='feedback' || entry.stage!==stage) return;
+  var confirmDelete = window.confirm('이 피드백을 삭제할까요? 삭제 후에는 되돌릴 수 없고, 이 피드백에 달린 답글도 함께 보이지 않게 됩니다.');
+  if(!confirmDelete) return;
+  entry.deleted = true;
+  entry.updatedAt = nowISO();
+  var key = stage+'|'+student.studentId;
+  if(DRAFTS.feedbackEditingId[key]===entryId){
+    DRAFTS.feedback[key] = '';
+    DRAFTS.feedbackEditingId[key] = null;
+  }
+  saveState(true).then(function(){ render(); toast('피드백을 삭제했습니다.'); });
 }
 
 function doAddReply(stage, rootId){
