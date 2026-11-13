@@ -1604,6 +1604,36 @@ function pushStudentRecordSafely(id, attemptsLeft){
   var path = 'students/' + encodeURIComponent(id);
   return cloudFetchWithETag(path, 6000).then(function(remote){
     var local = STATE.students[id];
+    // ★ 데이터 유실 방지 안전장치 ★ — 이 기기가 보내려는 local이 "방금
+    // newStudent()로 막 만들어진 것처럼 텅 비어있는"(제출/피드백 기록 없음,
+    // 비밀번호도 없음) 상태인데, 서버(remote)에는 이미 실제 기록(타임라인
+    // 또는 비밀번호)이 있다면 — 그 사이 정확히 무엇이 원인이었든(다른
+    // 학번으로 착각한 중복 등록, 로컬 상태가 어떤 이유로 초기화된 경우 등),
+    // 이걸 그대로 내보내면 그 학생의 실제 기록이 통째로 영구 삭제됩니다.
+    // 이 앱은 크로스 오리진 환경이라 Firebase의 조건부 쓰기(ETag/If-Match)가
+    // 실제로는 작동하지 않고(위 함수 설명 주석 참고) timeline만 merge될 뿐
+    // stageStatus/draft/accessLog 등 나머지 필드는 전혀 보호되지 않으므로,
+    // 여기서 보내기 전에 한 번 더 확인합니다. 의심되면 보내지 않고 대신
+    // 서버의(더 믿을 수 있는) 내용으로 이 기기의 local을 되돌립니다 — 조용히
+    // 지우는 사고를, 조용히 복구하는 쪽으로 뒤집습니다.
+    var remoteVal = remote && remote.value;
+    var remoteTimelineLen = (remoteVal && remoteVal.timeline && remoteVal.timeline.length) || 0;
+    var localTimelineLen = (local.timeline && local.timeline.length) || 0;
+    var remoteHasRealContent = !!remoteVal && (remoteTimelineLen > 0 || !!remoteVal.passwordHash);
+    var localLooksBlank = (localTimelineLen === 0) && !local.passwordHash;
+    if(remoteHasRealContent && localLooksBlank){
+      var healed = JSON.parse(JSON.stringify(remoteVal));
+      healed.timeline = mergeTimelines(local.timeline, remoteVal.timeline);
+      healed = mergeStudentPreservingLocalFiles(local, healed) || healed;
+      STATE.students[id] = healed;
+      delete CLOUD_DIRTY_IDS[id];
+      try{ dbSet('state', STATE); }catch(e){}
+      if(VIEW.studentId === id || VIEW.screen==='teacherDashboard'){
+        render();
+        toast('⚠ "'+id+'" 학생의 기록이 비어 보여서, 서버에 있던 실제 기록으로 자동 복구했습니다.');
+      }
+      return true;
+    }
     if(remote && remote.value && remote.value.timeline && remote.value.timeline.length){
       local.timeline = mergeTimelines(local.timeline, remote.value.timeline);
     }
@@ -1632,6 +1662,29 @@ function pushStudentRecordSafely(id, attemptsLeft){
         local.passwordSalt = remote.value.passwordSalt;
         local.passwordUpdatedAt = remote.value.passwordUpdatedAt || local.passwordUpdatedAt;
       }
+    }
+    // stageStatus(단계별 진행 상태: locked/open/submitted/approved)는 바로 위
+    // timeline/passwordHash와 달리 지금까지 전혀 합쳐지지 않고 "이 기기가
+    // 아는 값"을 그대로 실어 보냈습니다. 그런데 이 기기가 그 사이 뭔가의
+    // 이유로(예: 아직 동기화를 못 받아온 오래된 로컬 복사본을 들고 있다가,
+    // 뒤늦게 이 학생에게 피드백 등을 남겨 dirty가 된 경우) 실제로는 이미
+    // "제출함/승인함"으로 진행된 단계를 여전히 "대기중/잠김"으로 들고
+    // 있다면 — 그대로 보내는 순간 멀쩡히 진행되어 있던 학생의 단계가
+    // 조용히 초기화되어버립니다("분명히 제출/피드백까지 했는데 갑자기
+    // 대기중/잠김으로 비어 보인다" 증상 — timeline은 위에서 이미 merge로
+    // 보호되지만 stageStatus는 그렇지 않았던 지점). 그래서 단계별로 "더
+    // 진행된 쪽"(locked < open < submitted < approved)을 그대로 채택합니다
+    // — 상태는 앞으로만 나아가야 하고, 어느 한쪽의 오래된 로컬 복사본이
+    // 이미 진행된 상태를 뒤로 되돌리는 일은 없어야 합니다.
+    if(remote && remote.value && remote.value.stageStatus){
+      var remoteStatus = remote.value.stageStatus;
+      var mergedStatus = {};
+      ['stage1','research','final'].forEach(function(stage){
+        var localS = (local.stageStatus && local.stageStatus[stage]) || 'locked';
+        var remoteS = remoteStatus[stage] || 'locked';
+        mergedStatus[stage] = (stageRank(remoteS) > stageRank(localS)) ? remoteS : localS;
+      });
+      local.stageStatus = mergedStatus;
     }
     local.updatedAt = nowISO();
     var payload = studentForCloud(id, local);
@@ -1777,13 +1830,39 @@ function resolveFileDataUrl(studentId, fileId){
  * 으로 올바르게 동작합니다. 여러 학생에게 동시에 영향을 주는 동작(전체
  * 비밀번호 초기화, 학생 일괄 등록 등)이나 학생 화면이 아직 안 열려 있는
  * 상태에서 특정 학생이 생기는 동작(학생 추가, 접속 기록)은 명시적 hint가
- * 필요합니다.
+ * 필요합니다. meta(학교·과목·학급 정보, 교사 비밀번호 등)를 실제로 바꾸는
+ * 모든 호출부도 이미 각자 명시적으로 {type:'meta'}를 넘기므로, hint가 없고
+ * 열려 있는 학생도 없는 경우엔 "무엇이 바뀐 건지 알 수 없다"는 뜻입니다 —
+ * 이럴 때 예전에는 "그럼 meta겠지"로 추정했는데, 그 추정이 실제 교사
+ * 비밀번호 유실 사고의 원인이었습니다(아래 함수 안 주석 참고). 지금은 이
+ * 경우 아무 것도 전송하지 않습니다(로컬 저장은 영향 없음).
  */
 function scheduleCloudPush(hint){
   if(!CLOUD_ENABLED || !STATE) return;
   if(!hint){
-    if(VIEW.studentId && STATE.students[VIEW.studentId]) hint = {type:'student', id:VIEW.studentId};
-    else hint = {type:'meta'};
+    if(VIEW.studentId && STATE.students[VIEW.studentId]){
+      hint = {type:'student', id:VIEW.studentId};
+    } else {
+      // ★ 교사 비밀번호(및 학교·과목·학급 정보) 유실 버그의 실제 원인 ★ —
+      // 여기서 "학생 화면이 아니면 meta를 바꾼 것"이라고 추정해 hint를
+      // {type:'meta'}로 떨어뜨리던 예전 동작이 있었습니다. 문제는 이 기본값이
+      // "의도적으로 meta를 수정한" 모든 호출부(교사 인증/설정, 비밀번호
+      // 초기화)에서는 전혀 쓰이지 않는다는 점입니다 — 그 호출부들은 전부 이미
+      // 명시적으로 {type:'meta'}를 넘깁니다. 실제로 이 기본값을 타는 곳은
+      // init() 쪽의 "로컬 상태를 방어적으로 정리했으니 저장한다"는, meta와
+      // 전혀 무관한 saveState() 호출이었습니다 — 그런데 바로 그 순간
+      // 클라우드 pull이 느린 네트워크 때문에 실패해 있었다면(흔한 상황:
+      // 한동안 안 쓰던 기기를 다시 열 때), STATE.meta는 이 기기에 오래
+      // 남아있던 캐시(예: 예전 교사 비밀번호) 그대로인 채로 "meta가 바뀐
+      // 것"으로 오인되어 클라우드로 그대로 밀어 올려졌습니다 — 최근에 다른
+      // 기기에서 새로 바꾼 진짜 비밀번호를 흔적도 없이 되돌려버리는 것입니다.
+      // ("한동안 잘 되다가 갑자기 비밀번호가 틀렸다고 나온다"는 증상과 정확히
+      // 일치합니다.) meta를 실제로 바꾸는 모든 호출부는 이미 자기 hint를
+      // 명시하므로, 추정할 수 없는 경우엔 아무것도 보내지 않는 쪽이 안전
+      // 합니다 — 로컬 저장(dbSet)은 saveState()에서 이와 무관하게 그대로
+      // 진행됩니다.
+      return;
+    }
   }
   if(hint.type==='full'){
     CLOUD_PENDING = {meta:false, deadlines:false, announcements:false, ids:{}, full:true};
